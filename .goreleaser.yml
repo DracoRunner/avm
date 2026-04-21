@@ -47,36 +47,25 @@ release:
   footer: |
     **Full Changelog**: https://github.com/DracoRunner/avm/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-# Homebrew tap publishing is disabled for v0.1.0 because it requires a
-# Personal Access Token (HOMEBREW_TAP_GITHUB_TOKEN) with write access to
-# DracoRunner/homebrew-tap. The default GITHUB_TOKEN is scoped to this repo
-# only and cannot push to another repo.
-#
-# To enable in a future release:
-#   1. Create a PAT at https://github.com/settings/personal-access-tokens/new
-#      with repo access to DracoRunner/homebrew-tap (Contents: read/write)
-#   2. Add as a secret: gh secret set HOMEBREW_TAP_GITHUB_TOKEN --repo DracoRunner/avm
-#   3. Uncomment the brews: block below
-#
-# brews:
-#   - name: avm
-#     repository:
-#       owner: DracoRunner
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-#     directory: Formula
-#     homepage: "https://github.com/DracoRunner/avm"
-#     description: "A lightweight local/global command alias manager"
-#     license: "MIT"
-#     install: |
-#       bin.install "avm" => "avm-bin"
-#     caveats: |
-#       To enable avm in your shell, add this to your ~/.zshrc or ~/.bashrc:
-#
-#         eval "$(avm-bin shell-init)"
-#
-#       Then reload your shell:
-#
-#         source ~/.zshrc  # or source ~/.bashrc
-#     test: |
-#       system "#{bin}/avm-bin", "version"
+brews:
+  - name: avm
+    repository:
+      owner: DracoRunner
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/DracoRunner/avm"
+    description: "A lightweight local/global command alias manager"
+    license: "MIT"
+    install: |
+      bin.install "avm" => "avm-bin"
+    caveats: |
+      To enable avm in your shell, add this to your ~/.zshrc or ~/.bashrc:
+
+        eval "$(avm-bin shell-init)"
+
+      Then reload your shell:
+
+        source ~/.zshrc  # or source ~/.bashrc
+    test: |
+      system "#{bin}/avm-bin", "version"
