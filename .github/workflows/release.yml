@@ -30,7 +30,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # For pushing formula to DracoRunner/homebrew-tap (PAT recommended for cross-repo).
-          # If HOMEBREW_TAP_GITHUB_TOKEN is not set, GoReleaser will fall back to GITHUB_TOKEN,
-          # which works only when the tap is in the same repository owner AND has write permission.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
