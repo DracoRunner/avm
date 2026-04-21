@@ -129,6 +129,36 @@ Simple flat JSON:
 
 Keys are the alias names. Values are full shell command strings (args/flags/pipes all OK).
 
+### Placeholder Parameters
+
+Use `$1`, `$2`, etc. to insert arguments anywhere in the command:
+
+```json
+{
+  "adb:start": "adb shell am start -n $1/com.myapp.MainActivity",
+  "git:cb": "git checkout -b $1 origin/$2",
+  "docker:logs": "docker logs -f $1 --tail $2"
+}
+```
+
+**Examples:**
+
+```bash
+# Config: "adb:start": "adb shell am start -n $1/com.myapp.MainActivity"
+avm adb:start nz.co.skybox
+# Runs: adb shell am start -n nz.co.skybox/com.myapp.MainActivity
+
+# Config: "git:cb": "git checkout -b $1 origin/$2"
+avm git:cb feature-login main
+# Runs: git checkout -b feature-login origin/main
+
+# Config: "docker:logs": "docker logs -f $1 --tail $2"
+avm docker:logs mycontainer 100
+# Runs: docker logs -f mycontainer --tail 100
+```
+
+**Note:** If no placeholders are present, arguments are appended at the end (default behavior).
+
 ## Local vs Global Resolution
 
 1. **Local first** — checks `.avm.json` in the current directory

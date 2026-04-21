@@ -31,8 +31,24 @@ avm() {
 
   if [ -n "$resolved" ]; then
     shift
-    eval "$resolved $@"
-    return $?
+    # Check if command contains placeholders ($1, $2, etc.)
+    if echo "$resolved" | grep -qE '\$[0-9]+'; then
+      # Substitute placeholders with provided arguments
+      local cmd="$resolved"
+      local i=1
+      for arg in "$@"; do
+        cmd=$(echo "$cmd" | sed "s|\\\$$i|$arg|g")
+        i=$((i + 1))
+      done
+      # Remove any remaining unsubstituted placeholders
+      cmd=$(echo "$cmd" | sed 's/\$[0-9]\+//g')
+      eval "$cmd"
+      return $?
+    else
+      # No placeholders - append args at the end (original behavior)
+      eval "$resolved $@"
+      return $?
+    fi
   fi
 
   # No alias found, show usage
