@@ -44,9 +44,6 @@ changelog:
       - "^chore:"
 
 release:
-  github:
-    owner: DracoRunner
-    repo: avm
   footer: |
     **Full Changelog**: https://github.com/DracoRunner/avm/compare/{{ .PreviousTag }}...{{ .Tag }}
 
