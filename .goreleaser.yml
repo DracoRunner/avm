@@ -1,0 +1,73 @@
+version: 2
+
+project_name: avm
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: avm
+    main: .
+    binary: avm
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X avm/cmd.version={{.Version}}
+
+archives:
+  - id: avm
+    format: tar.gz
+    name_template: "avm_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ .Tag }}_snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: DracoRunner
+    repo: avm
+  footer: |
+    **Full Changelog**: https://github.com/DracoRunner/avm/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+brews:
+  - name: avm
+    repository:
+      owner: DracoRunner
+      name: homebrew-tap
+    directory: Formula
+    homepage: "https://github.com/DracoRunner/avm"
+    description: "A lightweight local/global command alias manager"
+    license: "MIT"
+    install: |
+      bin.install "avm" => "avm-bin"
+    caveats: |
+      To enable avm in your shell, add this to your ~/.zshrc or ~/.bashrc:
+
+        eval "$(avm-bin shell-init)"
+
+      Then reload your shell:
+
+        source ~/.zshrc  # or source ~/.bashrc
+    test: |
+      system "#{bin}/avm-bin", "version"

@@ -1,0 +1,44 @@
+{
+  "name": "@dracorunner/avm",
+  "version": "0.1.0",
+  "description": "A lightweight local/global command alias manager",
+  "bin": {
+    "avm-bin": "bin/avm-bin.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DracoRunner/avm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DracoRunner/avm/issues"
+  },
+  "homepage": "https://github.com/DracoRunner/avm#readme",
+  "author": "DracoRunner",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "node ./bin/install.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "keywords": [
+    "avm",
+    "alias",
+    "cli",
+    "command",
+    "wrapper",
+    "asdf",
+    "nvm"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
