@@ -1,13 +1,34 @@
 # avm — Alias Version Manager
 
-A lightweight local/global command alias manager that works like `asdf` or `nvm`, but for command aliases. It reads from a local `.avm.json` in the current directory, falls back to a global `~/.avm.json`, and if no alias is found it passes the command through to the shell normally.
+A lightweight local/global command alias manager that works like `asdf` or `nvm`, but for command aliases. It reads from a local `.avm.json` in the current directory, falls back to a global `~/.avm.json`, and if no alias is found, it offers interactive suggestions or passes the command through to the shell normally.
 
-## How it works
+## Why avm?
 
-- Local config: `.avm.json` in the current directory (per-project aliases)
-- Global config: `~/.avm.json` in your home directory (shared aliases)
-- Local overrides global
-- If nothing matches, the command runs through as-is
+Development setups often start clean: a few git aliases, a tidy `.zshrc`, and some short commands. But as soon as you dive into complex ecosystems like **React Native**, everything changes. Suddenly, you're juggling:
+
+- Complex ADB commands
+- Cryptic Xcode flags
+- Long Emulator IDs
+- App IDs and deployment scripts
+
+The problem isn't the platform—it's **context switching**. Every project and every platform has different commands and syntax. You waste time googling the same commands or digging through Slack history.
+
+**avm was built to fix that.**
+
+Instead of memorizing commands, you define them once per project in a `.avm.json`. avm keeps your shorthand scoped to the project and directory.
+
+- **One command runner** for everything.
+- **Project-scoped** aliases that don't pollute your global shell config.
+- **Global fallback** for your most common tools.
+- **Clean environment**: No more `.zshrc` bloat or git alias mess.
+
+## Features
+
+- **Directory-Aware**: Aliases change automatically based on your current folder.
+- **Global & Local**: Use global aliases for general tools and local ones for project-specific tasks.
+- **Interactive Suggestions**: (New!) If you mistype a command, avm suggests the closest match and lets you run it immediately.
+- **Placeholder Support**: Pass arguments into your aliases using `$1`, `$2`, etc.
+- **Passthrough**: If no alias is found, it runs the command through your shell as-is.
 
 ## Installation
 
@@ -17,8 +38,6 @@ A lightweight local/global command alias manager that works like `asdf` or `nvm`
 brew tap DracoRunner/tap
 brew install avm
 ```
-
-Then add to your shell profile (see [Shell Setup](#shell-setup) below).
 
 ### npm
 
@@ -32,175 +51,56 @@ npm install -g @dracorunner/avm
 curl -fsSL https://raw.githubusercontent.com/DracoRunner/avm/main/install.sh | bash
 ```
 
-This installer automatically:
-- Downloads the right binary for your platform
-- Creates `~/.avm.json` if missing
-- Adds the shell function to `~/.zshrc` and/or `~/.bashrc`
-
 ## Shell Setup
 
-The binary is installed as `avm-bin`. A shell function named `avm` wraps it so that typing `avm <key>` resolves aliases in the current directory context.
-
-Add this one line to your `~/.zshrc` or `~/.bashrc`:
+Add this line to your `~/.zshrc` or `~/.bashrc`:
 
 ```bash
 eval "$(avm-bin shell-init)"
 ```
 
-Then reload:
+## Usage Examples
 
-```bash
-source ~/.zshrc   # or source ~/.bashrc
+Define your aliases in `.avm.json`:
+
+```json
+{
+  "android:start": "npx react-native run-android",
+  "ios:build": "npx react-native run-ios --configuration Release",
+  "git:feature": "git checkout -b feature/$1",
+  "docker:up": "docker-compose up -d"
+}
 ```
 
-That's it — avm will now resolve aliases based on your current directory every time.
+Now you just type:
+- `avm android:start`
+- `avm ios:build`
+- `avm git:feature my-new-feature`
+- `avm docker:up`
+
+### Interactive Suggestions
+
+Mistyped a command? `avm` has your back:
+
+```bash
+$ avm tv-run
+avm: unknown command or alias "tv-run"
+? Did you mean one of these?:
+  ▸ tv:run
+    None (run as-is)
+```
 
 ## Commands
 
-### `avm init`
-Create a local `.avm.json` in the current directory.
+- `avm init`: Initialize local config.
+- `avm add <key> <value>`: Add local alias.
+- `avm add -g <key> <value>`: Add global alias.
+- `avm list` (or `ls`): List all aliases.
+- `avm remove <key>` (or `rm`): Remove an alias.
+- `avm which <key>`: See where an alias points.
 
-```bash
-avm init
-```
-
-### `avm add <key> <value>`
-Add/update a local alias.
-
-```bash
-avm add start "npm run dev"
-avm add deploy "sh ./scripts/deploy.sh"
-```
-
-### `avm add -g <key> <value>`
-Add/update a global alias.
-
-```bash
-avm add -g clean "docker system prune -a"
-```
-
-### `avm list` (alias: `ls`)
-List local + global aliases (local marked with `[override]` when it shadows a global).
-
-```bash
-avm list
-```
-
-### `avm remove <key>` (alias: `rm`)
-Remove a local alias. Use `-g` for global.
-
-```bash
-avm remove start
-avm remove -g clean
-```
-
-### `avm which <key>`
-Show what a key resolves to and where it comes from.
-
-```bash
-avm which start
-```
-
-### `avm <key> [args...]`
-Run the alias. Extra args are appended.
-
-```bash
-avm start
-avm start --port 4000
-```
-
-### `avm version`
-Print the version.
-
-### `avm shell-init`
-Print the shell function (used via `eval`).
-
-## `.avm.json` format
-
-Simple flat JSON:
-
-```json
-{
-  "start": "npm run dev",
-  "db": "docker-compose up postgres",
-  "deploy": "sh ./scripts/deploy.sh"
-}
-```
-
-Keys are the alias names. Values are full shell command strings (args/flags/pipes all OK).
-
-### Placeholder Parameters
-
-Use `$1`, `$2`, etc. to insert arguments anywhere in the command:
-
-```json
-{
-  "adb:start": "adb shell am start -n $1/com.myapp.MainActivity",
-  "git:cb": "git checkout -b $1 origin/$2",
-  "docker:logs": "docker logs -f $1 --tail $2"
-}
-```
-
-**Examples:**
-
-```bash
-# Config: "adb:start": "adb shell am start -n $1/com.myapp.MainActivity"
-avm adb:start nz.co.skybox
-# Runs: adb shell am start -n nz.co.skybox/com.myapp.MainActivity
-
-# Config: "git:cb": "git checkout -b $1 origin/$2"
-avm git:cb feature-login main
-# Runs: git checkout -b feature-login origin/main
-
-# Config: "docker:logs": "docker logs -f $1 --tail $2"
-avm docker:logs mycontainer 100
-# Runs: docker logs -f mycontainer --tail 100
-```
-
-**Note:** If no placeholders are present, arguments are appended at the end (default behavior).
-
-## Local vs Global Resolution
-
-1. **Local first** — checks `.avm.json` in the current directory
-2. **Global fallback** — then `~/.avm.json`
-3. **Override** — a local alias with the same name shadows the global one (shown as `[override]` in `avm list`)
-4. **Passthrough** — if no alias matches, the command runs normally
-
-## Example Workflow
-
-```bash
-# In a Node.js project
-cd my-app
-avm init
-avm add start "npm run dev"
-avm add test "npm test -- --watch"
-
-# In a Python project
-cd ../my-py-app
-avm init
-avm add start "python manage.py runserver"
-avm add test "pytest -v"
-
-# Both projects use 'avm start' — it runs the right thing
-```
-
-## Supported Shells
-
-- bash
-- zsh
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add my feature'`)
-4. Push (`git push origin feat/my-feature`)
-5. Open a PR
+## Read More
+Check out the story behind avm on [LinkedIn](https://lnkd.in/gEMzdm8P).
 
 ## License
-
-MIT — see [LICENSE](LICENSE)
-
-## Acknowledgments
-
-Inspired by [asdf](https://asdf-vm.com) and [nvm](https://github.com/nvm-sh/nvm).
+MIT

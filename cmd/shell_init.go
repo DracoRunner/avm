@@ -51,9 +51,37 @@ avm() {
     fi
   fi
 
-  # No alias found, show usage
-  command avm-bin "$@"
-  return $?
+  # No alias found, show interactive suggestions
+  # We use a temporary file to capture the selected command if exit code is 10
+  local out_file
+  out_file=$(mktemp)
+  trap 'rm -f "$out_file"' EXIT
+
+  local ret_code
+  
+  # We run avm-bin directly so it stays connected to the terminal (TTY).
+  # We pass a temp file path via environment variable for it to write the result.
+  AVM_RESULT_FILE="$out_file" command avm-bin "$@"
+  ret_code=$?
+
+  if [ $ret_code -eq 10 ]; then
+    # User picked a suggestion (which is just the command key)
+    local suggestion
+    suggestion=$(cat "$out_file")
+    if [ -n "$suggestion" ]; then
+      # Re-run avm with the picked suggestion
+      avm "$suggestion"
+      return $?
+    fi
+  elif [ $ret_code -eq 0 ]; then
+    # User chose "None" or hit ESC, or no suggestions were found
+    # Passthrough: run the original command
+    eval "$@"
+    return $?
+  else
+    # Some other error, return status
+    return $ret_code
+  fi
 }
 `
 
