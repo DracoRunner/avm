@@ -2,7 +2,7 @@
 set -e
 
 REPO="DracoRunner/avm"
-VERSION="v0.1.0"
+VERSION="v0.2.3"
 
 echo "Installing avm..."
 
