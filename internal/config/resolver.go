@@ -86,6 +86,12 @@ func SuggestAliases(query string) []string {
 			continue
 		}
 
+		// If one is a substring of another (using normalized versions)
+		if (strings.Contains(kNormalized, queryNormalized) || strings.Contains(queryNormalized, kNormalized)) && (len(queryNormalized) > 3 || len(kNormalized) > 3) {
+			suggestions = append(suggestions, k)
+			continue
+		}
+
 		// If one is a substring of another and they are long enough
 		if (strings.Contains(k, query) || strings.Contains(query, k)) && (len(query) > 3 || len(k) > 3) {
 			suggestions = append(suggestions, k)
