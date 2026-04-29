@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+echo '{"api_version": 1, "aliases": {"test'

@@ -19,7 +19,7 @@ avm() {
 
   # Check if it's an avm subcommand
   case "$key" in
-    init|add|list|ls|remove|rm|which|version|help|shell-init|completion|--help|-h|--version|-v)
+    init|add|list|ls|remove|rm|which|version|help|shell-init|plugin|completion|--help|-h|--version|-v)
       command avm-bin "$@"
       return $?
       ;;
@@ -27,28 +27,9 @@ avm() {
 
   # Try to resolve the alias
   local resolved
-  resolved=$(command avm-bin which "$key" 2>/dev/null | grep "^Command:" | sed 's/^Command: //')
-
-  if [ -n "$resolved" ]; then
-    shift
-    # Check if command contains placeholders ($1, $2, etc.)
-    if echo "$resolved" | grep -qE '\$[0-9]+'; then
-      # Substitute placeholders with provided arguments
-      local cmd="$resolved"
-      local i=1
-      for arg in "$@"; do
-        cmd=$(echo "$cmd" | sed "s|\\\$$i|$arg|g")
-        i=$((i + 1))
-      done
-      # Remove any remaining unsubstituted placeholders
-      cmd=$(echo "$cmd" | sed 's/\$[0-9]\+//g')
-      eval "$cmd"
-      return $?
-    else
-      # No placeholders - append args at the end (original behavior)
-      eval "$resolved $@"
-      return $?
-    fi
+  if resolved=$(command avm-bin resolve "$@" 2>/dev/null); then
+    eval "$resolved"
+    return $?
   fi
 
   # No alias found, show interactive suggestions
@@ -70,14 +51,16 @@ avm() {
     rm -f "$_avm_out_file"
     if [ -n "$suggestion" ]; then
       # Re-run avm with the picked suggestion
-      avm "$suggestion"
+      shift
+      avm "$suggestion" "$@"
       return $?
     fi
   elif [ $_avm_ret_code -eq 0 ]; then
     # User chose "None" or hit ESC, or no suggestions were found
     # Passthrough: run the original command
     rm -f "$_avm_out_file"
-    eval "$@"
+    # Execute the original command, properly quoting arguments
+    "$@"
     return $?
   else
     # Some other error, return exit code

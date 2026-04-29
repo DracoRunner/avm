@@ -22,6 +22,8 @@ The core feature of `avm`. Aliases are loaded from the `.avm.json` file in your 
 *   **High Performance**: Plugins run in parallel with a bounded worker pool and are cached per-invocation to ensure zero perceptible lag.
 *   **Management CLI**: Easily add, remove, and update plugins using `avm plugin add/remove/list/update`.
 
+See [PLUGINS.md](PLUGINS.md) for more details.
+
 ## 4. Official Plugins
 
 ### `avm-plugin-node`

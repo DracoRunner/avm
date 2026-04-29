@@ -5,18 +5,23 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var local map[string]string
 var global map[string]string
 var pluginAliases map[string]plugin.ResolvedAlias
-var loaded bool
+var loadOnce sync.Once
+var loadErr error
 
 func GetAliases() error {
-	if loaded {
-		return nil
-	}
+	loadOnce.Do(func() {
+		loadErr = loadAliasesInternal()
+	})
+	return loadErr
+}
 
+func loadAliasesInternal() error {
 	var err error
 
 	local, err = LoadFile(".", ".avm.json")
@@ -38,7 +43,6 @@ func GetAliases() error {
 		// fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
 	}
 
-	loaded = true
 	return nil
 }
 

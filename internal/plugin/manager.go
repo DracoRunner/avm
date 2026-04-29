@@ -1,11 +1,14 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +17,6 @@ import (
 var (
 	cache     map[string]ResolvedAlias
 	cacheOnce sync.Once
-	mu        sync.Mutex
 )
 
 const (
@@ -24,18 +26,22 @@ const (
 )
 
 func GetPluginDir() string {
+	if envDir := os.Getenv("AVM_PLUGIN_DIR"); envDir != "" {
+		return envDir
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".avm", "plugins")
 }
 
 func LoadAllPlugins(cwd string) (map[string]ResolvedAlias, error) {
-	mu.Lock()
-	if cache != nil {
-		defer mu.Unlock()
-		return cache, nil
-	}
-	mu.Unlock()
+	var err error
+	cacheOnce.Do(func() {
+		cache, err = loadAllPluginsInternal(cwd)
+	})
+	return cache, err
+}
 
+func loadAllPluginsInternal(cwd string) (map[string]ResolvedAlias, error) {
 	pluginDir := GetPluginDir()
 	if _, err := os.Stat(pluginDir); os.IsNotExist(err) {
 		return nil, nil
@@ -46,10 +52,20 @@ func LoadAllPlugins(cwd string) (map[string]ResolvedAlias, error) {
 		return nil, err
 	}
 
+	var dirNames []string
+	for _, d := range dirs {
+		if d.IsDir() || (d.Type()&os.ModeSymlink != 0) {
+			dirNames = append(dirNames, d.Name())
+		}
+	}
+	sort.Strings(dirNames)
+
 	results := make(map[string]ResolvedAlias)
 	var wg sync.WaitGroup
-	jobs := make(chan string, len(dirs))
-	resultsChan := make(chan map[string]ResolvedAlias, len(dirs))
+	jobs := make(chan string, len(dirNames))
+	
+	// Collect results safely
+	var mu sync.Mutex
 
 	ctx, cancel := context.WithTimeout(context.Background(), GlobalTimeout)
 	defer cancel()
@@ -63,35 +79,24 @@ func LoadAllPlugins(cwd string) (map[string]ResolvedAlias, error) {
 				pluginPath := filepath.Join(pluginDir, dirName)
 				aliases := loadPlugin(ctx, pluginPath, cwd)
 				if aliases != nil {
-					resultsChan <- aliases
+					mu.Lock()
+					for k, v := range aliases {
+						if _, exists := results[k]; !exists {
+							results[k] = v
+						}
+					}
+					mu.Unlock()
 				}
 			}
 		}()
 	}
 
-	for _, d := range dirs {
-		if d.IsDir() || (d.Type()&os.ModeSymlink != 0) {
-			jobs <- d.Name()
-		}
+	for _, name := range dirNames {
+		jobs <- name
 	}
 	close(jobs)
 
 	wg.Wait()
-	close(resultsChan)
-
-	for res := range resultsChan {
-		for k, v := range res {
-			// Precedence check: if multiple plugins provide the same key,
-			// the first one processed wins (or we could define a priority).
-			if _, exists := results[k]; !exists {
-				results[k] = v
-			}
-		}
-	}
-
-	mu.Lock()
-	cache = results
-	mu.Unlock()
 
 	return results, nil
 }
@@ -128,8 +133,14 @@ func loadPlugin(ctx context.Context, pluginPath, cwd string) map[string]Resolved
 	defer eCancel()
 
 	cmd := exec.CommandContext(eCtx, exportHook, "--dir", cwd)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	
 	output, err := cmd.Output()
 	if err != nil {
+		if os.Getenv("AVM_DEBUG") == "1" {
+			fmt.Fprintf(os.Stderr, "[avm] plugin %q failed: %v\nStderr: %s\n", manifest.Name, err, strings.TrimSpace(stderr.String()))
+		}
 		return nil
 	}
 
@@ -209,30 +220,58 @@ func InstallPlugin(source string) error {
 		return err
 	}
 
-	// Simple implementation: if it starts with http or git@, it's git.
-	// Otherwise, check if it's a local directory and symlink it.
-	
+	var target string
 	if isGitURL(source) {
 		name := filepath.Base(source)
 		name = strings.TrimSuffix(name, ".git")
-		target := filepath.Join(pluginDir, name)
+		target = filepath.Join(pluginDir, name)
+
+		if _, err := os.Stat(target); err == nil {
+			return fmt.Errorf("plugin already installed; use 'avm plugin update %s'", name)
+		}
+
 		cmd := exec.Command("git", "clone", source, target)
-		return cmd.Run()
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("git clone failed: %v", err)
+		}
+	} else {
+		// Local path
+		absPath, err := filepath.Abs(source)
+		if err != nil {
+			return err
+		}
+		name := filepath.Base(absPath)
+		target = filepath.Join(pluginDir, name)
+		
+		if _, err := os.Stat(target); err == nil {
+			return fmt.Errorf("plugin already installed; use 'avm plugin update %s'", name)
+		}
+
+		if err := os.Symlink(absPath, target); err != nil {
+			return fmt.Errorf("symlink failed: %v", err)
+		}
 	}
 
-	// Local path
-	absPath, err := filepath.Abs(source)
-	if err != nil {
-		return err
+	// Validate manifest and export-aliases
+	manifestPath := filepath.Join(target, "plugin.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		os.RemoveAll(target)
+		return fmt.Errorf("invalid plugin: missing plugin.json")
 	}
-	name := filepath.Base(absPath)
-	target := filepath.Join(pluginDir, name)
-	
-	return os.Symlink(absPath, target)
+	exportHook := filepath.Join(target, "bin", "export-aliases")
+	if _, err := os.Stat(exportHook); err != nil {
+		os.RemoveAll(target)
+		return fmt.Errorf("invalid plugin: missing bin/export-aliases")
+	}
+
+	return nil
 }
 
 func isGitURL(s string) bool {
-	return strings.HasPrefix(s, "http") || strings.HasPrefix(s, "git@")
+	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") ||
+		strings.HasPrefix(s, "git@") || strings.HasPrefix(s, "git://") || strings.HasPrefix(s, "ssh://")
 }
 
 func UpdatePlugin(name string) error {

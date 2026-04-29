@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -87,7 +88,13 @@ func List(alias *Alias) error {
 
 	if hasLocal {
 		fmt.Println(color.CyanString("Local aliases (.avm.json):"))
-		for key, value := range local {
+		var localKeys []string
+		for key := range local {
+			localKeys = append(localKeys, key)
+		}
+		sort.Strings(localKeys)
+		for _, key := range localKeys {
+			value := local[key]
 			if global != nil {
 				if _, ok := global[key]; ok {
 					fmt.Printf("  %s → %s  %s\n", color.GreenString(key), value, color.YellowString("[override global]"))
@@ -101,7 +108,13 @@ func List(alias *Alias) error {
 
 	if hasGlobal {
 		fmt.Println(color.CyanString("Global aliases (~/.avm.json):"))
-		for key, value := range global {
+		var globalKeys []string
+		for key := range global {
+			globalKeys = append(globalKeys, key)
+		}
+		sort.Strings(globalKeys)
+		for _, key := range globalKeys {
+			value := global[key]
 			if local != nil {
 				if _, ok := local[key]; ok {
 					continue
@@ -130,9 +143,22 @@ func List(alias *Alias) error {
 			sections[res.SectionName][key] = res.Command
 		}
 
-		for section, aliases := range sections {
+		var sectionNames []string
+		for section := range sections {
+			sectionNames = append(sectionNames, section)
+		}
+		sort.Strings(sectionNames)
+
+		for _, section := range sectionNames {
+			aliases := sections[section]
 			fmt.Println(color.CyanString(fmt.Sprintf("Plugin: %s:", section)))
-			for key, value := range aliases {
+			var pluginKeys []string
+			for key := range aliases {
+				pluginKeys = append(pluginKeys, key)
+			}
+			sort.Strings(pluginKeys)
+			for _, key := range pluginKeys {
+				value := aliases[key]
 				fmt.Printf("  %s → %s\n", color.GreenString(key), value)
 			}
 			fmt.Println()
