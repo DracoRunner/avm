@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+sleep 2
+echo '{"api_version": 1, "aliases": {"test-slow": "echo slow"}}'

@@ -102,4 +102,5 @@ func init() {
 	rootCmd.AddCommand(whichCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(shellInitCmd)
+	rootCmd.AddCommand(pluginCmd)
 }

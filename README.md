@@ -29,6 +29,18 @@ Instead of memorizing commands, you define them once per project in a `.avm.json
 - **Interactive Suggestions**: (New!) If you mistype a command, avm suggests the closest match and lets you run it immediately.
 - **Placeholder Support**: Pass arguments into your aliases using `$1`, `$2`, etc.
 - **Passthrough**: If no alias is found, it runs the command through your shell as-is.
+- **Extensible Plugins**: (New!) Dynamically extend avm with community or custom plugins.
+
+## Plugins
+
+`avm` supports a language-agnostic plugin system to dynamically discover project-specific aliases.
+
+### Official Plugins
+| Plugin | Description |
+| :--- | :--- |
+| [node](https://github.com/DracoRunner/avm-plugin-node) | Automatically exposes `package.json` scripts as aliases (npm, yarn, pnpm, bun). |
+
+See the [Plugins Documentation](doc/PLUGINS.md) for installation and creation guides.
 
 ## Installation
 

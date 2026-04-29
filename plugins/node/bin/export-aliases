@@ -1,0 +1,54 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+
+const args = process.argv.slice(2);
+const dirIndex = args.indexOf('--dir');
+const cwd = dirIndex !== -1 ? args[dirIndex + 1] : process.cwd();
+
+const packageJsonPath = path.join(cwd, 'package.json');
+
+if (!fs.existsSync(packageJsonPath)) {
+  console.log(JSON.stringify({ api_version: 1, aliases: {} }));
+  process.exit(0);
+}
+
+try {
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  const scripts = packageJson.scripts || {};
+
+  let manager = 'npm';
+  if (fs.existsSync(path.join(cwd, 'bun.lockb'))) {
+    manager = 'bun';
+  } else if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) {
+    manager = 'pnpm';
+  } else if (fs.existsSync(path.join(cwd, 'yarn.lock'))) {
+    manager = 'yarn';
+  }
+
+  const aliases = {};
+  for (const [name, command] of Object.entries(scripts)) {
+    // Determine the run prefix
+    let runPrefix = `${manager} run`;
+    if (manager === 'yarn') {
+      runPrefix = 'yarn'; // yarn doesn't strictly need 'run' for custom scripts
+    }
+
+    aliases[name] = {
+      command: `${runPrefix} ${name}`,
+      description: command,
+      source: 'package.json'
+    };
+  }
+
+  console.log(JSON.stringify({
+    api_version: 1,
+    aliases: aliases
+  }));
+
+} catch (err) {
+  process.stderr.write(`Error parsing package.json: ${err.message}\n`);
+  console.log(JSON.stringify({ api_version: 1, aliases: {} }));
+  process.exit(0);
+}

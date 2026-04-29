@@ -1,0 +1,8 @@
+{
+  "name": "node",
+  "version": "1.0.0",
+  "api_version": 1,
+  "description": "Exposes package.json scripts as aliases",
+  "section_label": "Node Scripts",
+  "homepage": "https://github.com/DracoRunner/avm-plugin-node"
+}

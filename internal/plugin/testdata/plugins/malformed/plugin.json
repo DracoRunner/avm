@@ -1,0 +1,7 @@
+{
+  "name": "malformed",
+  "version": "1.0.0",
+  "api_version": 1,
+  "description": "Malformed JSON plugin",
+  "section_label": "Malformed Scripts"
+}
