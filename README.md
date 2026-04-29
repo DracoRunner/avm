@@ -42,6 +42,8 @@ Instead of memorizing commands, you define them once per project in a `.avm.json
 
 See the [Plugins Documentation](doc/PLUGINS.md) for installation and creation guides.
 
+For technical details on the architecture, see [ARCHITECTURE.md](doc/ARCHITECTURE.md). For contribution and release instructions, see the [Development Guide](doc/DEVELOPMENT.md).
+
 ## Installation
 
 ### Homebrew
