@@ -1,6 +1,7 @@
 package config
 
 import (
+	"avm/internal/plugin"
 	"os"
 	"sort"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 var local map[string]string
 var global map[string]string
+var pluginAliases map[string]plugin.ResolvedAlias
 var loaded bool
 
 func GetAliases() error {
@@ -26,6 +28,14 @@ func GetAliases() error {
 	global, err = LoadFile(home, ".avm.json")
 	if err != nil {
 		return err
+	}
+
+	// Load plugins
+	cwd, _ := os.Getwd()
+	pluginAliases, err = plugin.LoadAllPlugins(cwd)
+	if err != nil {
+		// Log error but don't fail core resolution
+		// fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
 	}
 
 	loaded = true
@@ -49,6 +59,12 @@ func ResolveWithSource(key string) (string, bool, string, error) {
 		}
 	}
 
+	if pluginAliases != nil {
+		if res, exists := pluginAliases[key]; exists {
+			return res.Command, true, "plugin:" + res.PluginName, nil
+		}
+	}
+
 	return "", false, "", nil
 }
 
@@ -65,6 +81,11 @@ func SuggestAliases(query string) []string {
 	}
 	if global != nil {
 		for k := range global {
+			allKeys[k] = true
+		}
+	}
+	if pluginAliases != nil {
+		for k := range pluginAliases {
 			allKeys[k] = true
 		}
 	}

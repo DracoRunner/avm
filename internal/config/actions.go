@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -69,14 +70,16 @@ func List(alias *Alias) error {
 
 	hasLocal := local != nil && len(local) > 0
 	hasGlobal := global != nil && len(global) > 0
+	hasPlugins := pluginAliases != nil && len(pluginAliases) > 0
 
-	if !hasLocal && !hasGlobal {
+	if !hasLocal && !hasGlobal && !hasPlugins {
 		fmt.Println("No aliases configured.")
 		fmt.Println()
 		fmt.Println("Get started:")
 		fmt.Println("  avm init                          # Create local .avm.json")
 		fmt.Println("  avm add start \"npm run dev\"       # Add local alias")
 		fmt.Println("  avm add -g cleanup \"rm -rf tmp\"   # Add global alias")
+		fmt.Println("  avm plugin add <url>              # Add a plugin")
 		return nil
 	}
 
@@ -87,7 +90,7 @@ func List(alias *Alias) error {
 		for key, value := range local {
 			if global != nil {
 				if _, ok := global[key]; ok {
-					fmt.Printf("  %s → %s  %s\n", color.GreenString(key), value, color.YellowString("[override]"))
+					fmt.Printf("  %s → %s  %s\n", color.GreenString(key), value, color.YellowString("[override global]"))
 					continue
 				}
 			}
@@ -107,6 +110,33 @@ func List(alias *Alias) error {
 			fmt.Printf("  %s → %s\n", color.GreenString(key), value)
 		}
 		fmt.Println()
+	}
+
+	if hasPlugins {
+		// Group by section
+		sections := make(map[string]map[string]string)
+		for key, res := range pluginAliases {
+			// Precedence check: don't show if shadowed by local or global
+			if _, exists := local[key]; exists {
+				continue
+			}
+			if _, exists := global[key]; exists {
+				continue
+			}
+
+			if _, ok := sections[res.SectionName]; !ok {
+				sections[res.SectionName] = make(map[string]string)
+			}
+			sections[res.SectionName][key] = res.Command
+		}
+
+		for section, aliases := range sections {
+			fmt.Println(color.CyanString(fmt.Sprintf("Plugin: %s:", section)))
+			for key, value := range aliases {
+				fmt.Printf("  %s → %s\n", color.GreenString(key), value)
+			}
+			fmt.Println()
+		}
 	}
 
 	return nil
@@ -155,6 +185,9 @@ func Which(alias *Alias, key string) error {
 
 	if source == "local" {
 		fmt.Fprintf(os.Stderr, "%s alias '%s':\n", color.GreenString("Local"), key)
+	} else if strings.HasPrefix(source, "plugin:") {
+		pluginName := strings.TrimPrefix(source, "plugin:")
+		fmt.Fprintf(os.Stderr, "%s plugin alias '%s':\n", color.BlueString(strings.Title(pluginName)), key)
 	} else {
 		fmt.Fprintf(os.Stderr, "%s alias '%s':\n", color.BlueString("Global"), key)
 	}
