@@ -1,6 +1,6 @@
 {
   "name": "@dracorunner/avm",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "A lightweight local/global command alias manager",
   "bin": {
     "avm-bin": "bin/avm-bin.js"
