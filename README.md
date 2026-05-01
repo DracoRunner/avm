@@ -38,7 +38,7 @@ Instead of memorizing commands, you define them once per project in a `.avm.json
 ### Official Plugins
 | Plugin | Description |
 | :--- | :--- |
-| [node](https://github.com/DracoRunner/avm-plugin-node) | Automatically exposes `package.json` scripts as aliases (npm, yarn, pnpm, bun). |
+| [node](https://github.com/DracoRunner/avm-plugin-node) | Automatically exposes `package.json` scripts as aliases (npm, yarn, pnpm, bun). Supports monorepos with path-prefixed aliases. |
 
 See the [Plugins Documentation](doc/PLUGINS.md) for installation and creation guides.
 

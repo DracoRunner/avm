@@ -3,52 +3,105 @@
 const fs = require('fs');
 const path = require('path');
 
+const MAX_DEPTH = 4;
+
 const args = process.argv.slice(2);
 const dirIndex = args.indexOf('--dir');
-const cwd = dirIndex !== -1 ? args[dirIndex + 1] : process.cwd();
+const executionDir = dirIndex !== -1 ? args[dirIndex + 1] : process.cwd();
 
-const packageJsonPath = path.join(cwd, 'package.json');
-
-if (!fs.existsSync(packageJsonPath)) {
-  console.log(JSON.stringify({ api_version: 1, aliases: {} }));
-  process.exit(0);
+/**
+ * Detect the package manager based on lockfiles in the directory.
+ */
+function getManager(dir) {
+  if (fs.existsSync(path.join(dir, 'bun.lockb'))) return 'bun';
+  if (fs.existsSync(path.join(dir, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (fs.existsSync(path.join(dir, 'yarn.lock'))) return 'yarn';
+  return 'npm';
 }
 
-try {
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  const scripts = packageJson.scripts || {};
-
-  let manager = 'npm';
-  if (fs.existsSync(path.join(cwd, 'bun.lockb'))) {
-    manager = 'bun';
-  } else if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) {
-    manager = 'pnpm';
-  } else if (fs.existsSync(path.join(cwd, 'yarn.lock'))) {
-    manager = 'yarn';
+/**
+ * Recursively find all package.json files up to MAX_DEPTH.
+ * Ignores node_modules and hidden directories.
+ */
+function findPackageJsons(dir, currentDepth = 0) {
+  let results = [];
+  
+  const pkgPath = path.join(dir, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    results.push(pkgPath);
   }
 
-  const aliases = {};
-  for (const [name, command] of Object.entries(scripts)) {
-    // Determine the run prefix
-    let runPrefix = `${manager} run`;
-    if (manager === 'yarn') {
-      runPrefix = 'yarn'; // yarn doesn't strictly need 'run' for custom scripts
+  if (currentDepth >= MAX_DEPTH) return results;
+
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const name = entry.name;
+        // Skip common heavy/internal directories
+        if (name !== 'node_modules' && !name.startsWith('.') && name !== 'dist' && name !== 'build' && name !== 'out') {
+          results = results.concat(findPackageJsons(path.join(dir, name), currentDepth + 1));
+        }
+      }
     }
-
-    aliases[name] = {
-      command: `${runPrefix} ${name}`,
-      description: command,
-      source: 'package.json'
-    };
+  } catch (err) {
+    // Silently ignore permission errors or inaccessible directories
   }
+  
+  return results;
+}
 
-  console.log(JSON.stringify({
-    api_version: 1,
-    aliases: aliases
-  }));
+const rootManager = getManager(executionDir);
+const allPackageJsons = findPackageJsons(executionDir);
+const aliases = {};
 
-} catch (err) {
-  process.stderr.write(`Error parsing package.json: ${err.message}\n`);
+if (allPackageJsons.length === 0) {
   console.log(JSON.stringify({ api_version: 1, aliases: {} }));
   process.exit(0);
 }
+
+for (const pkgPath of allPackageJsons) {
+  try {
+    const pkgDir = path.dirname(pkgPath);
+    const relativeDir = path.relative(executionDir, pkgDir);
+    const pkgContent = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    const scripts = pkgContent.scripts || {};
+
+    for (const [scriptName, scriptCommand] of Object.entries(scripts)) {
+      let aliasName = scriptName;
+      let runCommand = '';
+      
+      // Use the manager detected at the root execution directory
+      const manager = rootManager;
+      const runPrefix = manager === 'yarn' ? 'yarn' : `${manager} run`;
+
+      if (relativeDir === '') {
+        // Scripts in the current directory: no prefix
+        aliasName = scriptName;
+        runCommand = `${runPrefix} ${scriptName}`;
+      } else {
+        // Scripts in subdirectories: use relative path as prefix
+        // We replace path separators with colons for a cleaner alias name
+        const prefix = relativeDir.split(path.sep).join(':');
+        aliasName = `${prefix}:${scriptName}`;
+        
+        // Use a universal CD command to ensure it works regardless of workspace config
+        // Using quotes around the path to handle spaces
+        runCommand = `cd "${relativeDir}" && ${runPrefix} ${scriptName}`;
+      }
+
+      aliases[aliasName] = {
+        command: runCommand,
+        description: scriptCommand,
+        source: relativeDir === '' ? 'package.json' : path.join(relativeDir, 'package.json')
+      };
+    }
+  } catch (err) {
+    process.stderr.write(`Error processing ${pkgPath}: ${err.message}\n`);
+  }
+}
+
+console.log(JSON.stringify({
+  api_version: 1,
+  aliases: aliases
+}));
