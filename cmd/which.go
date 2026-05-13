@@ -33,5 +33,10 @@ var whichCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
 			os.Exit(1)
 		}
+
+		if version, found, source, err := config.ResolveToolWithSource(key); err == nil && found {
+			fmt.Println()
+			fmt.Printf("Tool %s: %s (%s)\n", key, version, source)
+		}
 	},
 }

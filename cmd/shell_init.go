@@ -41,7 +41,7 @@ avm() {
 
   # Check if it's an avm subcommand
   case "$key" in
-    init|add|list|ls|remove|rm|which|env|version|help|shell-init|plugin|completion|--help|-h|--version|-v)
+    init|add|list|ls|remove|rm|which|env|tool|version|help|shell-init|plugin|completion|--help|-h|--version|-v)
       command avm-bin "$@"
       return $?
       ;;

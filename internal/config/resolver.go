@@ -13,6 +13,8 @@ var global map[string]string
 
 var localEnv map[string]string
 var globalEnv map[string]string
+var localTools map[string]string
+var globalTools map[string]string
 
 var pluginAliases map[string]plugin.ResolvedAlias
 var loadOnce sync.Once
@@ -28,13 +30,13 @@ func GetAliases() error {
 func loadAliasesInternal() error {
 	var err error
 
-	local, localEnv, err = LoadFileWithEnv(".", ".avm.json")
+	local, localEnv, localTools, err = LoadFileWithEnv(".", ".avm.json")
 	if err != nil {
 		return err
 	}
 
 	home := os.Getenv("HOME")
-	global, globalEnv, err = LoadFileWithEnv(home, ".avm.json")
+	global, globalEnv, globalTools, err = LoadFileWithEnv(home, ".avm.json")
 	if err != nil {
 		return err
 	}
@@ -66,6 +68,73 @@ func ResolveEnv() (map[string]string, error) {
 	}
 
 	return resolved, nil
+}
+
+func ResolveTools() (map[string]string, error) {
+	if err := GetAliases(); err != nil {
+		return nil, err
+	}
+
+	resolved := map[string]string{}
+
+	for tool, version := range globalTools {
+		resolved[tool] = version
+	}
+
+	for tool, version := range localTools {
+		resolved[tool] = version
+	}
+
+	return resolved, nil
+}
+
+type ResolvedTool struct {
+	Version string
+	Source  string
+}
+
+func ResolveToolsWithSource() (map[string]ResolvedTool, error) {
+	if err := GetAliases(); err != nil {
+		return nil, err
+	}
+
+	resolved := map[string]ResolvedTool{}
+
+	for tool, version := range globalTools {
+		resolved[tool] = ResolvedTool{
+			Version: version,
+			Source:  "global",
+		}
+	}
+
+	for tool, version := range localTools {
+		resolved[tool] = ResolvedTool{
+			Version: version,
+			Source:  "local",
+		}
+	}
+
+	return resolved, nil
+}
+
+func ResolveToolWithSource(key string) (string, bool, string, error) {
+	if err := GetAliases(); err != nil {
+		return "", false, "", err
+	}
+
+	if localTools != nil {
+		if version, exists := localTools[key]; exists {
+			return version, true, "local", nil
+		}
+	}
+
+	if globalTools != nil {
+		if version, exists := globalTools[key]; exists {
+			return version, true, "global", nil
+		}
+	}
+
+	return "", false, "", nil
 }
 
 func ResolveWithSource(key string) (string, bool, string, error) {

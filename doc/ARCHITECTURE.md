@@ -34,6 +34,9 @@ This document details the internal workings of **avm (Alias Version Manager)**, 
     *   `config.go`: File I/O for `.avm.json`.
     *   `resolver.go`: Logic for searching local/global/plugin scopes and fuzzy matching.
     *   `actions.go`: Business logic for CRUD operations on aliases.
+*   `internal/tooling/`: Tool runtime resolution and installation.
+    *   `tooling.go`: Provider registry and runtime env synthesis.
+    *   `node.go`: Node.js provider with install/update path wiring.
 
 ---
 
@@ -42,7 +45,19 @@ The `resolver.go` implements a hierarchical lookup:
 1.  **Local Context**: Searches for `.avm.json` in the current working directory.
 2.  **Global Context**: Searches for `~/.avm.json`.
 3.  **Plugin Context**: Executes all installed plugins to fetch dynamic aliases.
-4.  **Precedence**: Local > Global > Plugins.
+4.  **Tool Context**: Reads local/global `tools` selections from `.avm.json` and resolves active versions.
+5.  **Precedence**: Local > Global > Plugins.
+
+---
+
+## 6. Tool Runtime Injection Path
+`avm env` now includes resolved runtime environment from selected tools.
+
+`cmd/shell_init.go` loads this using:
+
+1. `command avm-bin env` to obtain resolved exports.
+2. `eval` to apply these exports before alias execution.
+3. PATH prefixes for installed runtime providers to ensure selected versions take precedence.
 
 ---
 

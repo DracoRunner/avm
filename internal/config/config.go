@@ -16,10 +16,11 @@ type Alias struct {
 type ConfigFile struct {
 	Aliases map[string]string `json:"aliases"`
 	Env     map[string]string `json:"env"`
+	Tools   map[string]string `json:"tools"`
 }
 
 func LoadFile(root string, localFile string) (map[string]string, error) {
-	aliases, _, err := LoadFileWithEnv(root, localFile)
+	aliases, _, _, err := LoadFileWithEnv(root, localFile)
 	if err != nil {
 		return nil, err
 	}
@@ -27,19 +28,19 @@ func LoadFile(root string, localFile string) (map[string]string, error) {
 	return aliases, nil
 }
 
-func LoadFileWithEnv(root string, localFile string) (map[string]string, map[string]string, error) {
+func LoadFileWithEnv(root string, localFile string) (map[string]string, map[string]string, map[string]string, error) {
 	file := filepath.Join(root, localFile)
 	data, err := os.ReadFile(file)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil, nil
+			return nil, nil, nil, nil
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	aliases, env, structured, err := parseConfigFile(data)
+	aliases, env, tools, structured, err := parseConfigFile(data)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Backward-compatible auto-migration:
@@ -51,31 +52,32 @@ func LoadFileWithEnv(root string, localFile string) (map[string]string, map[stri
 		}
 	}
 
-	return aliases, env, nil
+	return aliases, env, tools, nil
 }
 
-func parseConfigFile(data []byte) (map[string]string, map[string]string, bool, error) {
+func parseConfigFile(data []byte) (map[string]string, map[string]string, map[string]string, bool, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, nil, false, fmt.Errorf("invalid config json: %w", err)
+		return nil, nil, nil, false, fmt.Errorf("invalid config json: %w", err)
 	}
 
 	_, hasAliases := raw["aliases"]
 	_, hasEnv := raw["env"]
-	if hasAliases || hasEnv {
+	_, hasTools := raw["tools"]
+	if hasAliases || hasEnv || hasTools {
 		cfg, err := parseStructuredConfig(data)
 		if err == nil {
 			normalizeConfigFile(cfg)
-			return cfg.Aliases, cfg.Env, true, nil
+			return cfg.Aliases, cfg.Env, cfg.Tools, true, nil
 		}
 	}
 
 	var aliases map[string]string
 	if err := json.Unmarshal(data, &aliases); err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 
-	return aliases, nil, false, nil
+	return aliases, nil, nil, false, nil
 }
 
 func parseStructuredConfig(data []byte) (*ConfigFile, error) {
@@ -104,7 +106,8 @@ func IsStructuredConfig(root string, localFile string) (bool, error) {
 
 	_, hasAliases := raw["aliases"]
 	_, hasEnv := raw["env"]
-	return hasAliases || hasEnv, nil
+	_, hasTools := raw["tools"]
+	return hasAliases || hasEnv || hasTools, nil
 }
 
 func MigrateLegacyConfig(root string, localFile string) error {
@@ -117,7 +120,7 @@ func MigrateLegacyConfig(root string, localFile string) error {
 		return err
 	}
 
-	aliases, _, structured, err := parseConfigFile(data)
+	aliases, _, _, structured, err := parseConfigFile(data)
 	if err != nil {
 		return err
 	}
@@ -131,7 +134,7 @@ func MigrateLegacyConfig(root string, localFile string) error {
 
 func migrateLegacyConfig(root string, localFile string, aliases map[string]string) error {
 	// Migrate legacy flat-map config to structured format.
-	return SaveConfig(root, localFile, aliases, nil, true)
+	return SaveConfig(root, localFile, aliases, nil, nil, true)
 }
 
 func normalizeConfigFile(cfg *ConfigFile) {
@@ -141,9 +144,12 @@ func normalizeConfigFile(cfg *ConfigFile) {
 	if cfg.Env == nil {
 		cfg.Env = map[string]string{}
 	}
+	if cfg.Tools == nil {
+		cfg.Tools = map[string]string{}
+	}
 }
 
-func SaveConfig(root string, localFile string, aliases map[string]string, env map[string]string, structured bool) error {
+func SaveConfig(root string, localFile string, aliases map[string]string, env map[string]string, tools map[string]string, structured bool) error {
 	file := filepath.Join(root, localFile)
 
 	if aliases == nil {
@@ -161,8 +167,12 @@ func SaveConfig(root string, localFile string, aliases map[string]string, env ma
 	cfg := ConfigFile{
 		Aliases: aliases,
 	}
+
 	if len(env) > 0 {
 		cfg.Env = env
+	}
+	if len(tools) > 0 {
+		cfg.Tools = tools
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

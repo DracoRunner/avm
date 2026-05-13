@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"avm/internal/config"
+	"avm/internal/tooling"
 	"fmt"
 	"os"
 	"sort"
@@ -20,6 +21,13 @@ var envCmd = &cobra.Command{
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "avm env error: %v\n", err)
 			os.Exit(1)
+		}
+
+		toolEnv, err := tooling.ResolveToolEnv(".")
+		if err == nil {
+			for key, value := range toolEnv {
+				env[key] = value
+			}
 		}
 
 		if envFormat != "export" {
@@ -43,4 +51,3 @@ func init() {
 	envCmd.Flags().StringVarP(&envFormat, "format", "f", "export", "Output format")
 	rootCmd.AddCommand(envCmd)
 }
-

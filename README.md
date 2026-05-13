@@ -25,6 +25,7 @@ Instead of memorizing commands, you define them once per project in a `.avm.json
 ## Features
 
 - **Directory-Aware**: Aliases change automatically based on your current folder.
+- **Tool Versions**: Resolve runtime tool versions from `.avm.json` with local/global precedence and inject `PATH` for active commands.
 - **Global & Local**: Use global aliases for general tools and local ones for project-specific tasks.
 - **Interactive Suggestions**: (New!) If you mistype a command, avm suggests the closest match and lets you run it immediately.
 - **Placeholder Support**: Pass arguments into your aliases using `$1`, `$2`, etc.
@@ -88,6 +89,9 @@ Define your aliases in `.avm.json`:
   "env": {
     "NODE_ENV": "development",
     "API_URL": "https://api.local"
+  },
+  "tools": {
+    "node": "20.11.1"
   }
 }
 ```
@@ -123,6 +127,11 @@ avm: unknown command or alias "tv-run"
 - `avm list` (or `ls`): List all aliases.
 - `avm remove <key>` (or `rm`): Remove an alias.
 - `avm which <key>`: See where an alias points.
+- `avm tool list`: List active and installed tool versions.
+- `avm tool use <tool> <version>`: Set local tool version in `.avm.json`.
+- `avm tool use --global <tool> <version>`: Set global tool version.
+- `avm tool install <tool> <version>`: Install runtime version under `~/.avm/tools/<tool>/<version>/`.
+- `avm tool uninstall <tool> <version>`: Remove installed runtime version.
 
 ## Read More
 Check out the story behind avm on [LinkedIn](https://lnkd.in/gEMzdm8P).

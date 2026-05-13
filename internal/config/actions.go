@@ -50,7 +50,7 @@ func Add(alias *Alias, key string, value string) error {
 		}
 	}
 
-	aliases, env, err := LoadFileWithEnv(root, localFile)
+	aliases, env, tools, err := LoadFileWithEnv(root, localFile)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func Add(alias *Alias, key string, value string) error {
 		return err
 	}
 
-	return SaveConfig(root, localFile, aliases, env, structured)
+	return SaveConfig(root, localFile, aliases, env, tools, structured)
 }
 
 func List(alias *Alias) error {
@@ -76,15 +76,21 @@ func List(alias *Alias) error {
 
 	hasLocal := local != nil && len(local) > 0
 	hasGlobal := global != nil && len(global) > 0
+	hasLocalTools := localTools != nil && len(localTools) > 0
+	hasGlobalTools := globalTools != nil && len(globalTools) > 0
 	hasPlugins := pluginAliases != nil && len(pluginAliases) > 0
 
-	if !hasLocal && !hasGlobal && !hasPlugins {
+	hasLocalEnv := localEnv != nil && len(localEnv) > 0
+	hasGlobalEnv := globalEnv != nil && len(globalEnv) > 0
+
+	if !hasLocal && !hasGlobal && !hasLocalTools && !hasGlobalTools && !hasPlugins && !hasLocalEnv && !hasGlobalEnv {
 		fmt.Println("No aliases configured.")
 		fmt.Println()
 		fmt.Println("Get started:")
 		fmt.Println("  avm init                          # Create local .avm.json")
 		fmt.Println("  avm add start \"npm run dev\"       # Add local alias")
 		fmt.Println("  avm add -g cleanup \"rm -rf tmp\"   # Add global alias")
+		fmt.Println("  avm tool use node 20.11.1         # Set local node version")
 		fmt.Println("  avm plugin add <url>              # Add a plugin")
 		return nil
 	}
@@ -110,9 +116,6 @@ func List(alias *Alias) error {
 		}
 		fmt.Println()
 	}
-
-	hasLocalEnv := localEnv != nil && len(localEnv) > 0
-	hasGlobalEnv := globalEnv != nil && len(globalEnv) > 0
 
 	if hasLocalEnv {
 		fmt.Println(color.CyanString("Local environment (.avm.json):"))
@@ -172,6 +175,45 @@ func List(alias *Alias) error {
 		fmt.Println()
 	}
 
+	if hasLocalTools {
+		fmt.Println(color.CyanString("Local tools (.avm.json):"))
+		var localToolKeys []string
+		for key := range localTools {
+			localToolKeys = append(localToolKeys, key)
+		}
+		sort.Strings(localToolKeys)
+		for _, key := range localToolKeys {
+			version := localTools[key]
+			if globalTools != nil {
+				if _, ok := globalTools[key]; ok {
+					fmt.Printf("  %s=%s  %s\n", color.GreenString(key), version, color.YellowString("[override global]"))
+					continue
+				}
+			}
+			fmt.Printf("  %s=%s\n", color.GreenString(key), version)
+		}
+		fmt.Println()
+	}
+
+	if hasGlobalTools {
+		fmt.Println(color.CyanString("Global tools (~/.avm.json):"))
+		var globalToolKeys []string
+		for key := range globalTools {
+			globalToolKeys = append(globalToolKeys, key)
+		}
+		sort.Strings(globalToolKeys)
+		for _, key := range globalToolKeys {
+			if localTools != nil {
+				if _, ok := localTools[key]; ok {
+					continue
+				}
+			}
+			version := globalTools[key]
+			fmt.Printf("  %s=%s\n", color.GreenString(key), version)
+		}
+		fmt.Println()
+	}
+
 	if hasPlugins {
 		// Group by section
 		sections := make(map[string]map[string]string)
@@ -227,7 +269,7 @@ func Remove(alias *Alias, key string) error {
 		return fmt.Errorf("no %s found", localFile)
 	}
 
-	aliases, env, err := LoadFileWithEnv(root, localFile)
+	aliases, env, tools, err := LoadFileWithEnv(root, localFile)
 	if err != nil {
 		return err
 	}
@@ -247,7 +289,7 @@ func Remove(alias *Alias, key string) error {
 		return err
 	}
 
-	return SaveConfig(root, localFile, aliases, env, structured)
+	return SaveConfig(root, localFile, aliases, env, tools, structured)
 }
 
 func Which(alias *Alias, key string) error {
@@ -265,11 +307,50 @@ func Which(alias *Alias, key string) error {
 		fmt.Fprintf(os.Stderr, "%s alias '%s':\n", color.GreenString("Local"), key)
 	} else if strings.HasPrefix(source, "plugin:") {
 		pluginName := strings.TrimPrefix(source, "plugin:")
-		fmt.Fprintf(os.Stderr, "%s plugin alias '%s':\n", color.BlueString(strings.Title(pluginName)), key)
+		pluginLabel := pluginName
+		if len(pluginLabel) > 0 {
+			pluginLabel = strings.ToUpper(pluginLabel[:1]) + pluginLabel[1:]
+		}
+		fmt.Fprintf(os.Stderr, "%s plugin alias '%s':\n", color.BlueString(pluginLabel), key)
 	} else {
 		fmt.Fprintf(os.Stderr, "%s alias '%s':\n", color.BlueString("Global"), key)
 	}
 	fmt.Printf("Command: %s\n", val)
 
 	return nil
+}
+
+func UseTool(alias *Alias, tool string, version string) error {
+	root := alias.Root
+	localFile := alias.LocalFile
+
+	if alias.Global {
+		exists, err := IsFileExists(root, localFile)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			if err := CreateDefaultConfig(root, localFile); err != nil {
+				return err
+			}
+		}
+	}
+
+	aliases, env, tools, err := LoadFileWithEnv(root, localFile)
+	if err != nil {
+		return err
+	}
+
+	if aliases == nil {
+		aliases = map[string]string{}
+	}
+
+	if tools == nil {
+		tools = map[string]string{}
+	}
+
+	tools[tool] = version
+
+	structured := true
+	return SaveConfig(root, localFile, aliases, env, tools, structured)
 }
