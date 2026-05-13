@@ -1,48 +1,68 @@
 # Contributing to avm
 
-First off, thank you for considering contributing to **avm**! It's people like you that make **avm** such a great tool.
+`avm` is maintained as a Rust workspace. Keep contributions scoped to the current Rust implementation unless a migration note explicitly says otherwise.
 
-## How Can I Contribute?
+## Development setup
 
-### Reporting Bugs
-If you find a bug, please search the issue tracker to see if it has already been reported. If not, please open a new issue and include:
-* A clear and descriptive title.
-* Steps to reproduce the bug.
-* Expected and actual behavior.
-* Your operating system and `avm` version.
+Prerequisites:
 
-### Suggesting Enhancements
-We are always looking for ways to improve **avm**. If you have an idea, please open a feature request issue!
+- Rust stable
+- Docker with Compose for isolated test runs
+- Node.js 20+ only for npm package wrapper and release tooling
 
-### Pull Requests
-1. Fork the repository and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. Ensure the test suite passes.
-4. Make sure your code lints.
-5. Issue that pull request!
+Build:
 
-## Local Development
-
-### Prerequisites
-- [Go](https://go.dev/) 1.21 or higher
-- [Node.js](https://nodejs.org/) (for plugin development)
-- [pnpm](https://pnpm.io/)
-
-### Building the Binary
 ```bash
-go build -o avm-bin main.go
+cargo build --workspace
 ```
 
-### Running Tests
+Run tests:
+
 ```bash
-go test ./...
+cargo test --workspace
 ```
 
-### Testing Plugins Locally
+Run the full Docker suite:
+
 ```bash
-./avm-bin plugin add $(pwd)/plugins/node
+docker/tests/run-docker-tests.sh
 ```
 
-## Style Guide
-- Follow standard Go idioms and `gofmt`.
-- Keep commits focused and provide clear commit messages.
+## Pull requests
+
+Before opening a PR, run:
+
+```bash
+cargo build --workspace
+cargo test --workspace
+npm run changelog:check
+```
+
+Recommended before larger PRs:
+
+```bash
+cargo fmt --check
+cargo clippy --workspace --all-targets
+```
+
+## Code rules
+
+- Keep command wiring in `crates/avm-cli`.
+- Keep config and resolver logic in `crates/avm-core`.
+- Keep shim behavior in `crates/avm-shims`.
+- Keep provider contracts in `crates/avm-plugin-api`.
+- Keep external plugin execution in `crates/avm-runtime`.
+- Keep Node provider behavior in `crates/avm-plugin-node`.
+- Avoid panics in runtime paths.
+- Preserve `.avm.json` compatibility.
+- Preserve local-first then global precedence.
+
+## Docs
+
+Update docs when behavior changes:
+
+- [Architecture](docs/architecture/ARCHITECTURE.md)
+- [Runtime flow](docs/architecture/FLOW.md)
+- [Testing](docs/ops/TESTING.md)
+- [Release](docs/ops/RELEASE.md)
+- [Migration](docs/migration/RUST_REWRITE.md)

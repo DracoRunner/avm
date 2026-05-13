@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-REPO="DracoRunner/avm"
-VERSION="v0.2.3"
+REPO="prajanova/avm"
+VERSION="${AVM_VERSION:-latest}"
 
 echo "Installing avm..."
 
@@ -30,7 +30,11 @@ echo "Detected: $os/$arch"
 
 # Download and install
 binary_name="avm_${os}_${arch}"
-url="https://github.com/${REPO}/releases/download/${VERSION}/${binary_name}.tar.gz"
+if [ "$VERSION" = "latest" ]; then
+    url="https://github.com/${REPO}/releases/latest/download/${binary_name}.tar.gz"
+else
+    url="https://github.com/${REPO}/releases/download/${VERSION}/${binary_name}.tar.gz"
+fi
 
 echo "Downloading $binary_name..."
 
@@ -56,18 +60,27 @@ fi
 
 # Install binary as avm-bin (shell function will be named 'avm')
 INSTALL_PATH=""
+extracted_binary="avm-bin"
+if [ ! -f "$extracted_binary" ] && [ -f "avm" ]; then
+    extracted_binary="avm"
+fi
+if [ ! -f "$extracted_binary" ]; then
+    echo "Error: archive did not contain avm-bin"
+    exit 1
+fi
+
 if [ -w "/usr/local/bin" ]; then
-    chmod +x "avm"
-    mv "avm" /usr/local/bin/avm-bin
+    chmod +x "$extracted_binary"
+    mv "$extracted_binary" /usr/local/bin/avm-bin
     INSTALL_PATH="/usr/local/bin/avm-bin"
 elif sudo -n true 2>/dev/null; then
-    chmod +x "avm"
-    sudo mv "avm" /usr/local/bin/avm-bin
+    chmod +x "$extracted_binary"
+    sudo mv "$extracted_binary" /usr/local/bin/avm-bin
     INSTALL_PATH="/usr/local/bin/avm-bin"
 else
     mkdir -p "$HOME/.local/bin"
-    chmod +x "avm"
-    mv "avm" "$HOME/.local/bin/avm-bin"
+    chmod +x "$extracted_binary"
+    mv "$extracted_binary" "$HOME/.local/bin/avm-bin"
     INSTALL_PATH="$HOME/.local/bin/avm-bin"
     NEED_PATH_UPDATE=1
 fi
@@ -101,7 +114,7 @@ case "$CURRENT_SHELL" in
 esac
 
 SHELL_SETUP_BLOCK='
-# avm (Alias Version Manager) - BEGIN (do not edit this block)
+# avm (Any Version Manager) - BEGIN (do not edit this block)
 export PATH="$HOME/.local/bin:$PATH"
 if command -v avm-bin >/dev/null 2>&1; then
   eval "$(avm-bin shell-init)"
@@ -116,7 +129,7 @@ for cfg in "${SHELL_CONFIGS[@]}"; do
         touch "$cfg"
     fi
 
-    if ! grep -q "# avm (Alias Version Manager) - BEGIN" "$cfg" 2>/dev/null; then
+    if ! grep -q "# avm (Any Version Manager) - BEGIN" "$cfg" 2>/dev/null; then
         echo "$SHELL_SETUP_BLOCK" >> "$cfg"
         echo "✓ Added avm setup to $cfg"
     else
@@ -125,7 +138,7 @@ for cfg in "${SHELL_CONFIGS[@]}"; do
 done
 
 echo ""
-echo "🎉 Welcome to avm!"
+echo "Welcome to avm."
 echo ""
 echo "To activate avm in your current shell, run:"
 for cfg in "${SHELL_CONFIGS[@]}"; do

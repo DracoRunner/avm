@@ -3,31 +3,186 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: Check release version and changelog
+        run: bash scripts/check-release-version.sh
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: avm_linux_amd64.tar.gz
+          - os: ubuntu-24.04-arm
+            archive: avm_linux_arm64.tar.gz
+          - os: macos-13
+            archive: avm_darwin_amd64.tar.gz
+          - os: macos-latest
+            archive: avm_darwin_arm64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --package avm-cli --bin avm-bin
+
+      - name: Create release archive
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/avm-bin dist/avm-bin
+          tar -C dist -czf "${{ matrix.archive }}" avm-bin
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true
+
+  npm:
+    needs: github-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish npm package
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  homebrew:
+    needs: github-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download release archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checkout Homebrew tap
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: prajanova/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
+      - name: Update formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          base_url="https://github.com/prajanova/avm/releases/download/${GITHUB_REF_NAME}"
+          linux_amd64_sha="$(sha256sum dist/avm_linux_amd64.tar.gz | awk '{print $1}')"
+          linux_arm64_sha="$(sha256sum dist/avm_linux_arm64.tar.gz | awk '{print $1}')"
+          darwin_amd64_sha="$(sha256sum dist/avm_darwin_amd64.tar.gz | awk '{print $1}')"
+          darwin_arm64_sha="$(sha256sum dist/avm_darwin_arm64.tar.gz | awk '{print $1}')"
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/avm.rb <<RUBY
+          class Avm < Formula
+            desc "Any Version Manager with aliases, shims, and provider plugins"
+            homepage "https://github.com/prajanova/avm"
+            version "${version}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "${base_url}/avm_darwin_arm64.tar.gz"
+                sha256 "${darwin_arm64_sha}"
+              end
+
+              on_intel do
+                url "${base_url}/avm_darwin_amd64.tar.gz"
+                sha256 "${darwin_amd64_sha}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${base_url}/avm_linux_arm64.tar.gz"
+                sha256 "${linux_arm64_sha}"
+              end
+
+              on_intel do
+                url "${base_url}/avm_linux_amd64.tar.gz"
+                sha256 "${linux_amd64_sha}"
+              end
+            end
+
+            def install
+              bin.install "avm-bin"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/avm-bin version")
+            end
+          end
+          RUBY
+
+      - name: Commit formula update
+        shell: bash
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/avm.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+          else
+            git commit -m "Update avm to ${GITHUB_REF_NAME}"
+            git push
+          fi
