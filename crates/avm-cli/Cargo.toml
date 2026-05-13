@@ -1,0 +1,17 @@
+[package]
+name = "avm-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+avm-core = { path = "../avm-core" }
+avm-plugin-api = { path = "../avm-plugin-api" }
+avm-plugin-node = { path = "../avm-plugin-node" }
+avm-runtime = { path = "../avm-runtime" }
+avm-shims = { path = "../avm-shims" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+[[bin]]
+name = "avm-bin"
+path = "src/main.rs"

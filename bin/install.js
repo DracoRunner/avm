@@ -8,24 +8,24 @@ const { execSync } = require('child_process');
 const os = require('os');
 
 const pkg = require('../package.json');
-const REPO = 'DracoRunner/avm';
+const REPO = 'prajanova/avm';
 const VERSION = `v${pkg.version}`;
 
 function getPlatform() {
   const platform = process.platform;
   const arch = process.arch;
 
-  let goOs, goArch;
+  let osName, archName;
 
-  if (platform === 'darwin') goOs = 'darwin';
-  else if (platform === 'linux') goOs = 'linux';
+  if (platform === 'darwin') osName = 'darwin';
+  else if (platform === 'linux') osName = 'linux';
   else throw new Error(`Unsupported OS: ${platform}`);
 
-  if (arch === 'x64') goArch = 'amd64';
-  else if (arch === 'arm64') goArch = 'arm64';
+  if (arch === 'x64') archName = 'amd64';
+  else if (arch === 'arm64') archName = 'arm64';
   else throw new Error(`Unsupported architecture: ${arch}`);
 
-  return { goOs, goArch };
+  return { osName, archName };
 }
 
 function download(url, dest) {
@@ -56,24 +56,26 @@ function download(url, dest) {
 
 async function main() {
   try {
-    const { goOs, goArch } = getPlatform();
-    const archiveName = `avm_${goOs}_${goArch}.tar.gz`;
+    const { osName, archName } = getPlatform();
+    const archiveName = `avm_${osName}_${archName}.tar.gz`;
     const url = `https://github.com/${REPO}/releases/download/${VERSION}/${archiveName}`;
 
     const binDir = path.join(__dirname);
     const tarPath = path.join(binDir, archiveName);
     const finalBinary = path.join(binDir, 'avm-bin');
 
-    console.log(`Downloading avm ${VERSION} for ${goOs}/${goArch}...`);
+    console.log(`Downloading avm ${VERSION} for ${osName}/${archName}...`);
     await download(url, tarPath);
 
     console.log('Extracting...');
     execSync(`tar -xzf "${tarPath}" -C "${binDir}"`);
 
-    // The archive contains a binary named "avm"; rename to "avm-bin"
-    const extractedBinary = path.join(binDir, 'avm');
-    if (fs.existsSync(extractedBinary)) {
-      fs.renameSync(extractedBinary, finalBinary);
+    const extractedAvmBin = path.join(binDir, 'avm-bin');
+    const extractedLegacyAvm = path.join(binDir, 'avm');
+    if (fs.existsSync(extractedLegacyAvm) && !fs.existsSync(extractedAvmBin)) {
+      fs.renameSync(extractedLegacyAvm, finalBinary);
+    } else if (!fs.existsSync(extractedAvmBin)) {
+      throw new Error('release archive did not contain avm-bin');
     }
 
     fs.chmodSync(finalBinary, 0o755);
@@ -93,7 +95,7 @@ async function main() {
     console.log('Then reload: source ~/.zshrc  # or source ~/.bashrc');
   } catch (err) {
     console.error('avm install failed:', err.message);
-    console.error('You can install manually from: https://github.com/DracoRunner/avm/releases');
+    console.error('You can install manually from: https://github.com/prajanova/avm/releases');
     process.exit(1);
   }
 }

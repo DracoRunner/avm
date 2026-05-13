@@ -1,90 +1,61 @@
-# avm — Alias Version Manager
+# avm — Any Version Manager
 
-A lightweight local/global command alias manager that works like `asdf` or `nvm`, but for command aliases. It reads from a local `.avm.json` in the current directory, falls back to a global `~/.avm.json`, and if no alias is found, it offers interactive suggestions or passes the command through to the shell normally.
+`avm` is a Rust-native, monorepo-based tooling layer for local command aliases, project-level runtime selection, and plugin-driven command discovery.
 
-## Why avm?
+It solves three practical problems:
 
-Development setups often start clean: a few git aliases, a tidy `.zshrc`, and some short commands. But as soon as you dive into complex ecosystems like **React Native**, everything changes. Suddenly, you're juggling:
+- command drift across projects
+- manual setup of project-specific runtime versions
+- repetitive shell configuration for ad hoc aliases
 
-- Complex ADB commands
-- Cryptic Xcode flags
-- Long Emulator IDs
-- App IDs and deployment scripts
+### What avm handles today
 
-The problem isn't the platform—it's **context switching**. Every project and every platform has different commands and syntax. You waste time googling the same commands or digging through Slack history.
+- project and global alias resolution from `.avm.json`
+- directory-aware execution with local-first precedence
+- runtime environment injection via `PATH` and explicit `env` values
+- Node package-script discovery from `package.json` (npm/yarn/pnpm/bun)
+- shim-based command interception (for `node`, `npm`, and future tool shims)
+- a plugin system with pluggable providers
+- fallback behavior: if a managed version is not installed, avm uses the host/system command and warns
 
-**avm was built to fix that.**
+For positioning versus popular alternatives, see [Comparison with asdf and vfox](#comparison-with-asdf-and-vfox).
 
-Instead of memorizing commands, you define them once per project in a `.avm.json`. avm keeps your shorthand scoped to the project and directory.
+## Comparison with asdf and vfox
 
-- **One command runner** for everything.
-- **Project-scoped** aliases that don't pollute your global shell config.
-- **Global fallback** for your most common tools.
-- **Clean environment**: No more `.zshrc` bloat or git alias mess.
+| Capability | avm (this project) | asdf | vfox |
+| --- | --- | --- | --- |
+| Runtime model | Native Rust binary | Ruby/plugin ecosystem with Bash integrations | Rust shell-hook engine with plugin runtime |
+| Tool interception | PATH shims in `~/.avm/shims` | Shim generation + dispatch by plugin hooks | Shell hook updates PATH dynamically |
+| Plugin ecosystem | Provider-first + optional adapter layer | Bash-style plugins | Lua-style plugins |
+| Node support strategy | Merged Node provider (`package.json` + version resolver) | External Node plugin scripts | Provider-based Node integrations |
+| Fallback if requested node version missing | Uses system node with warning | Typically triggers plugin install flow | Typically triggers plugin install flow |
+| Configuration default | `.avm.json` with local/global + legacy compatibility | `.tool-versions` | `.tool-versions` |
+| Security / isolation | Rust host + plugin runtime boundary (WASM/exec adapters) | Shell scripts (higher host access) | In-process plugin runtime (less isolated than strict sandbox) |
 
-## Features
-
-- **Directory-Aware**: Aliases change automatically based on your current folder.
-- **Tool Versions**: Resolve runtime tool versions from `.avm.json` with local/global precedence and inject `PATH` for active commands.
-- **Global & Local**: Use global aliases for general tools and local ones for project-specific tasks.
-- **Interactive Suggestions**: (New!) If you mistype a command, avm suggests the closest match and lets you run it immediately.
-- **Placeholder Support**: Pass arguments into your aliases using `$1`, `$2`, etc.
-- **Passthrough**: If no alias is found, it runs the command through your shell as-is.
-- **Extensible Plugins**: (New!) Dynamically extend avm with community or custom plugins.
-
-## Plugins
-
-`avm` supports a language-agnostic plugin system to dynamically discover project-specific aliases.
-
-### Official Plugins
-| Plugin | Description |
-| :--- | :--- |
-| [node](https://github.com/DracoRunner/avm-plugin-node) | Automatically exposes `package.json` scripts as aliases (npm, yarn, pnpm, bun). |
-
-See the [Plugins Documentation](doc/PLUGINS.md) for installation and creation guides.
-
-For technical details on the architecture, see [ARCHITECTURE.md](doc/ARCHITECTURE.md). For contribution and release instructions, see the [Development Guide](doc/DEVELOPMENT.md).
-
-## Installation
-
-### Homebrew
+## Quick start
 
 ```bash
-brew tap DracoRunner/tap
-brew install avm
+avm init
+avm add dev "pnpm run dev"
+avm tool use node 20.11.1
+avm run dev
 ```
 
-### npm
+### Shell setup (for plain command interception)
 
 ```bash
-npm install -g @dracorunner/avm
+eval "$(avm shell-init)"
 ```
 
-### curl (recommended — auto-configures shell)
+This enables direct execution via shims. For example, if `node` is managed in `.avm.json`, `node` will resolve through avm-managed versions before falling back.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/DracoRunner/avm/main/install.sh | bash
-```
-
-## Shell Setup
-
-Add this line to your `~/.zshrc` or `~/.bashrc`:
-
-```bash
-eval "$(avm-bin shell-init)"
-```
-
-## Usage Examples
-
-Define your aliases in `.avm.json`:
+## `.avm.json` format
 
 ```json
 {
   "aliases": {
-    "android:start": "npx react-native run-android",
-    "ios:build": "npx react-native run-ios --configuration Release",
-    "git:feature": "git checkout -b feature/$1",
-    "docker:up": "docker-compose up -d"
+    "dev": "pnpm run dev",
+    "release": "npm run release $1"
   },
   "env": {
     "NODE_ENV": "development",
@@ -96,45 +67,128 @@ Define your aliases in `.avm.json`:
 }
 ```
 
-`avm` also still supports legacy `.avm.json` files that contain only aliases as a flat map.
-Existing legacy `.avm.json` files are migrated to the structured form automatically on read, so users upgrading to this version do not need to manually edit existing files.
+`avm` also reads legacy flat-map `.avm.json` files and migrates them into the structured object form on read.
 
-Now you just type:
-- `avm android:start`
-- `avm ios:build`
-- `avm git:feature my-new-feature`
-- `avm docker:up`
+Precedence rules:
 
-Run `avm list` to inspect active local/global aliases and `env` values side by side.
-
-### Interactive Suggestions
-
-Mistyped a command? `avm` has your back:
-
-```bash
-$ avm tv-run
-avm: unknown command or alias "tv-run"
-? Did you mean one of these?:
-  ▸ tv:run
-    None (run as-is)
-```
+- local `.avm.json` overrides global `~/.avm.json`
+- alias suggestions respect override ordering
+- environment is merged with local values overriding global values
+- tool version lookup is local first, then global
 
 ## Commands
 
-- `avm init`: Initialize local config.
-- `avm add <key> <value>`: Add local alias.
-- `avm add -g <key> <value>`: Add global alias.
-- `avm list` (or `ls`): List all aliases.
-- `avm remove <key>` (or `rm`): Remove an alias.
-- `avm which <key>`: See where an alias points.
-- `avm tool list`: List active and installed tool versions.
-- `avm tool use <tool> <version>`: Set local tool version in `.avm.json`.
-- `avm tool use --global <tool> <version>`: Set global tool version.
-- `avm tool install <tool> <version>`: Install runtime version under `~/.avm/tools/<tool>/<version>/`.
-- `avm tool uninstall <tool> <version>`: Remove installed runtime version.
+- `avm init` initializes `.avm.json` in the current directory
+- `avm add [--global] <alias> <command>` adds an alias
+- `avm remove [--global] <alias>` removes an alias
+- `avm list` shows merged aliases, env, tools, and plugin aliases
+- `avm which <alias-or-tool>` prints the origin and resolved value
+- `avm run <alias> [args...]` executes resolved command
+- `avm env` prints shell-safe `export` lines
+- `avm resolve <alias> [args...]` prints the expanded shell command
+- `avm tool use [--global] <tool> <version>` sets tool version
+- `avm tool install <tool> <version>` is reserved for provider installers; the current Node baseline does not auto-install
+- `avm tool uninstall <tool> <version>` removes an installed managed Node directory when present
+- `avm tool list` prints configured and installed tools
+- `avm plugin add|list|remove|update` manages external providers
+- `avm shims install|remove|path` controls shim lifecycle
+- `avm shell-init` prints shell bootstrap script
+- `avm version` prints current CLI version
 
-## Read More
-Check out the story behind avm on [LinkedIn](https://lnkd.in/gEMzdm8P).
+## Package layout (workspace crates)
+
+This repository is organized as a Rust workspace:
+
+- `crates/avm-cli`
+  - Clap-based binary entrypoint and command routing
+- `crates/avm-core`
+  - config parsing, alias/tool/env resolution, and shared types
+- `crates/avm-shims`
+  - shim generation and shim execution hooks
+- `crates/avm-plugin-api`
+  - host/plugin contract interfaces and manifest/schema model
+- `crates/avm-plugin-node`
+  - merged Node provider
+  - Node version management and package-script alias discovery
+- `crates/avm-runtime`
+  - plugin runtime and external plugin execution abstraction
+
+Architecture docs:
+
+- [Architecture](docs/architecture/ARCHITECTURE.md)
+- [Runtime flow](docs/architecture/FLOW.md)
+- [Docker and test workflow](docs/ops/TESTING.md)
+- [Release and publishing](docs/ops/RELEASE.md)
+- [Rust rewrite migration](docs/migration/RUST_REWRITE.md)
+
+Agent and LLM docs:
+
+- [Agent guide](agent.md)
+- [Agent skill](agent.skill.md)
+- [LLM context](llm.txt)
+- [LLM text context](llm.text)
+
+## Installation
+
+Use any option supported in your environment:
+
+```bash
+brew install avm
+```
+
+```bash
+npm install -g @prajanova/avm
+```
+
+```bash
+cargo install --path .
+```
+
+## Docker-based test suite
+
+Run the full Rust and scenario suite in an isolated container:
+
+```bash
+docker/tests/run-docker-tests.sh
+```
+
+Run only Rust tests locally:
+
+```bash
+cargo test --workspace
+```
+
+Run one scenario:
+
+```bash
+docker/tests/run-docker-tests.sh 01
+docker/tests/run-docker-tests.sh 01-basic-alias.sh
+docker/tests/run-docker-tests.sh docker/tests/scenarios/01-basic-alias.sh
+```
+
+Scenario files:
+- `docker/tests/scenarios/01-basic-alias.sh`
+- `docker/tests/scenarios/02-local-global-precedence.sh`
+- `docker/tests/scenarios/03-shim-fallback.sh`
+- `docker/tests/scenarios/04-node-package-scripts.sh`
+
+## Plugin behavior
+
+The Node provider currently powers:
+
+- project `package.json` alias extraction
+- tool version selection for `node`
+- manager fallback to an existing system installation when managed version is missing
+
+The architecture is plugin-first, so additional providers can be added without changing the CLI flow.
+
+## Notes for contributors
+
+- Keep all runtime logic in Rust crates.
+- Prefer explicit, typed errors (`thiserror` / `anyhow`) over panics in runtime paths.
+- Follow workspace standards in [AGENTS.md](./AGENTS.md).
+- Use shim execution as the default integration model for plain command resolution.
 
 ## License
+
 MIT

@@ -7,7 +7,7 @@ const fs = require('fs');
 const binaryPath = path.join(__dirname, 'avm-bin');
 
 if (!fs.existsSync(binaryPath)) {
-  console.error('avm binary not found. Try reinstalling: npm install -g @dracorunner/avm');
+  console.error('avm binary not found. Try reinstalling: npm install -g @prajanova/avm');
   process.exit(1);
 }
 

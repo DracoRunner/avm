@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build workspace
+        run: cargo build --workspace
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: Check changelog
+        run: bash scripts/check-changelog.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Docker test suite
+        run: docker/tests/run-docker-tests.sh

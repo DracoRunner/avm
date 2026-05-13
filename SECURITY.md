@@ -6,8 +6,8 @@ Only the latest version of **avm** is currently supported for security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| v0.3.x  | :white_check_mark: |
-| < v0.3  | :x:                |
+| v0.2.x  | :white_check_mark: |
+| < v0.2  | :x:                |
 
 ## Reporting a Vulnerability
 
