@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"avm/internal/config"
-	"avm/internal/tooling"
 	"fmt"
 	"os"
 	"sort"
 
+	"github.com/PrajaNova/avm/internal/config"
+	"github.com/PrajaNova/avm/internal/tooling"
 	"github.com/spf13/cobra"
 )
 
@@ -16,23 +16,22 @@ var envCmd = &cobra.Command{
 	Use:    "env",
 	Short:  "Resolve environment variables for current directory",
 	Hidden: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if envFormat != "export" {
+			return fmt.Errorf("unknown env format: %s", envFormat)
+		}
+
 		env, err := config.ResolveEnv()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "avm env error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("avm env error: %w", err)
 		}
 
 		toolEnv, err := tooling.ResolveToolEnv(".")
-		if err == nil {
-			for key, value := range toolEnv {
-				env[key] = value
-			}
+		if err != nil {
+			return err
 		}
-
-		if envFormat != "export" {
-			fmt.Fprintln(os.Stderr, "unknown env format")
-			os.Exit(1)
+		for key, value := range toolEnv {
+			env[key] = value
 		}
 
 		var keys []string
@@ -44,6 +43,7 @@ var envCmd = &cobra.Command{
 		for _, key := range keys {
 			fmt.Fprintf(os.Stdout, "export %s=%s\n", key, shellQuote(env[key]))
 		}
+		return nil
 	},
 }
 

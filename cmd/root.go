@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"avm/internal/config"
 	"fmt"
 	"os"
 
+	"github.com/PrajaNova/avm/internal/config"
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
@@ -24,7 +24,7 @@ Configuration:
 If no alias is found, commands pass through to the shell normally.`,
 	Version: version,
 	Args:    cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			query := args[0]
 
@@ -57,38 +57,55 @@ If no alias is found, commands pass through to the shell normally.`,
 
 				if err != nil {
 					// User hit ESC or interrupted
-					os.Exit(0)
+					return nil
 				}
 
 				if result == "None (run as-is)" {
-					os.Exit(0)
+					return nil
 				}
 
 				// If AVM_RESULT_FILE is set, write the result there for the shell function
 				resultFile := os.Getenv("AVM_RESULT_FILE")
 				if resultFile != "" {
 					if err := os.WriteFile(resultFile, []byte(result), 0644); err != nil {
-						os.Exit(1)
+						return err
 					}
 				} else {
 					// Fallback to stdout
 					fmt.Println(result)
 				}
 
-				os.Exit(10)
+				return exitCode(10)
 			} else {
 				// No suggestions, just exit 0 to let shell handle passthrough
-				os.Exit(0)
+				return nil
 			}
 		} else {
-			cmd.Help()
+			return cmd.Help()
 		}
+		return nil
 	},
+}
+
+type exitCodeError struct {
+	code int
+}
+
+func (e exitCodeError) Error() string {
+	return ""
+}
+
+func exitCode(code int) error {
+	return exitCodeError{code: code}
 }
 
 func Execute() {
 	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
 	if err := rootCmd.Execute(); err != nil {
+		if exitErr, ok := err.(exitCodeError); ok {
+			os.Exit(exitErr.code)
+		}
 		fmt.Fprintf(os.Stderr, "avm: %v\n", err)
 		os.Exit(1)
 	}

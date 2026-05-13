@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"avm/internal/config"
+	"github.com/PrajaNova/avm/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ var addCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 		value := strings.Join(args[1:], " ")
 
@@ -44,8 +44,7 @@ var addCmd = &cobra.Command{
 		}
 
 		if err := config.Add(alias, key, value); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		if globalAlias {
@@ -53,6 +52,7 @@ var addCmd = &cobra.Command{
 		} else {
 			fmt.Printf("✓ Added local alias '%s' → %s\n", key, value)
 		}
+		return nil
 	},
 }
 

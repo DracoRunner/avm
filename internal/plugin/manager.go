@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	cache     map[string]ResolvedAlias
-	cacheOnce sync.Once
+	cache   = map[string]map[string]ResolvedAlias{}
+	cacheMu sync.Mutex
 )
 
 const (
@@ -34,11 +34,25 @@ func GetPluginDir() string {
 }
 
 func LoadAllPlugins(cwd string) (map[string]ResolvedAlias, error) {
-	var err error
-	cacheOnce.Do(func() {
-		cache, err = loadAllPluginsInternal(cwd)
-	})
-	return cache, err
+	pluginDir := GetPluginDir()
+	cacheKey := pluginDir + string(os.PathListSeparator) + cwd
+
+	cacheMu.Lock()
+	if aliases, ok := cache[cacheKey]; ok {
+		cacheMu.Unlock()
+		return aliases, nil
+	}
+	cacheMu.Unlock()
+
+	aliases, err := loadAllPluginsInternal(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheMu.Lock()
+	cache[cacheKey] = aliases
+	cacheMu.Unlock()
+	return aliases, nil
 }
 
 func loadAllPluginsInternal(cwd string) (map[string]ResolvedAlias, error) {
@@ -63,7 +77,7 @@ func loadAllPluginsInternal(cwd string) (map[string]ResolvedAlias, error) {
 	results := make(map[string]ResolvedAlias)
 	var wg sync.WaitGroup
 	jobs := make(chan string, len(dirNames))
-	
+
 	// Collect results safely
 	var mu sync.Mutex
 
@@ -135,7 +149,7 @@ func loadPlugin(ctx context.Context, pluginPath, cwd string) map[string]Resolved
 	cmd := exec.CommandContext(eCtx, exportHook, "--dir", cwd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	output, err := cmd.Output()
 	if err != nil {
 		if os.Getenv("AVM_DEBUG") == "1" {
@@ -183,7 +197,7 @@ func loadPlugin(ctx context.Context, pluginPath, cwd string) map[string]Resolved
 
 func GetManifest(pluginName string) (*Manifest, error) {
 	pluginPath := filepath.Join(GetPluginDir(), pluginName)
-	
+
 	// Try bin/describe first
 	describeHook := filepath.Join(pluginPath, "bin", "describe")
 	if _, err := os.Stat(describeHook); err == nil {
@@ -244,7 +258,7 @@ func InstallPlugin(source string) error {
 		}
 		name := filepath.Base(absPath)
 		target = filepath.Join(pluginDir, name)
-		
+
 		if _, err := os.Stat(target); err == nil {
 			return fmt.Errorf("plugin already installed; use 'avm plugin update %s'", name)
 		}

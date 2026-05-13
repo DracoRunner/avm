@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"avm/internal/config"
+	"github.com/PrajaNova/avm/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +19,7 @@ var whichCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 
 		alias := &config.Alias{
@@ -30,13 +29,15 @@ var whichCmd = &cobra.Command{
 		}
 
 		if err := config.Which(alias, key); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		if version, found, source, err := config.ResolveToolWithSource(key); err == nil && found {
 			fmt.Println()
 			fmt.Printf("Tool %s: %s (%s)\n", key, version, source)
+		} else if err != nil {
+			return err
 		}
+		return nil
 	},
 }

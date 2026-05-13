@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"avm/internal/config"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
+	"github.com/PrajaNova/avm/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -17,25 +16,25 @@ var resolveCmd = &cobra.Command{
 	Short:  "Resolve an alias, expand placeholders, and print only the command",
 	Hidden: true,
 	Args:   cobra.ArbitraryArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			os.Exit(1)
+			return exitCode(1)
 		}
 		key := args[0]
 		restArgs := args[1:]
 
 		val, found, _, err := config.ResolveWithSource(key)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "avm resolve error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("avm resolve error: %w", err)
 		}
 
 		if !found {
-			os.Exit(1)
+			return exitCode(1)
 		}
 
 		cmdline := expandPlaceholders(val, restArgs)
 		fmt.Print(cmdline)
+		return nil
 	},
 }
 

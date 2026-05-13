@@ -1,12 +1,13 @@
 package tooling
 
 import (
-	"avm/internal/config"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/PrajaNova/avm/internal/config"
 )
 
 type ToolProvider interface {
@@ -18,10 +19,7 @@ type ToolProvider interface {
 	ToolExecutablePath(tool string, version string) (string, error)
 }
 
-type ResolvedTool struct {
-	Version string
-	Source  string
-}
+type ResolvedTool = config.ResolvedTool
 
 type ToolEnv map[string]string
 
@@ -37,8 +35,7 @@ func GetProvider(tool string) (ToolProvider, bool) {
 }
 
 func ResolveTools(cwd string) (map[string]ResolvedTool, error) {
-	_ = cwd
-	return config.ResolveToolsWithSource()
+	return config.ResolveToolsWithSourceFor(cwd)
 }
 
 func InstallTool(tool string, version string) error {

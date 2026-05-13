@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"avm/internal/config"
+	"github.com/PrajaNova/avm/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var removeCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 
 		var alias *config.Alias
@@ -42,8 +42,7 @@ var removeCmd = &cobra.Command{
 		}
 
 		if err := config.Remove(alias, key); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		if removeGlobal {
@@ -51,6 +50,7 @@ var removeCmd = &cobra.Command{
 		} else {
 			fmt.Printf("✓ Removed local alias '%s'\n", key)
 		}
+		return nil
 	},
 }
 

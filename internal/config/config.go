@@ -1,8 +1,10 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -66,10 +68,14 @@ func parseConfigFile(data []byte) (map[string]string, map[string]string, map[str
 	_, hasTools := raw["tools"]
 	if hasAliases || hasEnv || hasTools {
 		cfg, err := parseStructuredConfig(data)
-		if err == nil {
-			normalizeConfigFile(cfg)
-			return cfg.Aliases, cfg.Env, cfg.Tools, true, nil
+		if err != nil {
+			return nil, nil, nil, true, err
 		}
+		normalizeConfigFile(cfg)
+		if err := validateConfigFile(cfg); err != nil {
+			return nil, nil, nil, true, err
+		}
+		return cfg.Aliases, cfg.Env, cfg.Tools, true, nil
 	}
 
 	var aliases map[string]string
@@ -149,6 +155,36 @@ func normalizeConfigFile(cfg *ConfigFile) {
 	}
 }
 
+func validateConfigFile(cfg *ConfigFile) error {
+	for key := range cfg.Env {
+		if !IsValidEnvKey(key) {
+			return fmt.Errorf("invalid env key %q: must match [A-Za-z_][A-Za-z0-9_]*", key)
+		}
+	}
+	return nil
+}
+
+func IsValidEnvKey(key string) bool {
+	if key == "" {
+		return false
+	}
+
+	for i, r := range key {
+		if i == 0 {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_' {
+				continue
+			}
+			return false
+		}
+
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func SaveConfig(root string, localFile string, aliases map[string]string, env map[string]string, tools map[string]string, structured bool) error {
 	file := filepath.Join(root, localFile)
 
@@ -161,7 +197,7 @@ func SaveConfig(root string, localFile string, aliases map[string]string, env ma
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(file, data, 0644)
+		return writeFileAtomic(file, data, 0644)
 	}
 
 	cfg := ConfigFile{
@@ -169,6 +205,9 @@ func SaveConfig(root string, localFile string, aliases map[string]string, env ma
 	}
 
 	if len(env) > 0 {
+		if err := validateConfigFile(&ConfigFile{Env: env}); err != nil {
+			return err
+		}
 		cfg.Env = env
 	}
 	if len(tools) > 0 {
@@ -179,7 +218,7 @@ func SaveConfig(root string, localFile string, aliases map[string]string, env ma
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(file, data, 0644)
+	return writeFileAtomic(file, data, 0644)
 }
 
 func SaveAliases(root string, localFile string, aliases map[string]string) error {
@@ -189,7 +228,7 @@ func SaveAliases(root string, localFile string, aliases map[string]string) error
 		return err
 	}
 
-	return os.WriteFile(file, data, 0644)
+	return writeFileAtomic(file, data, 0644)
 }
 
 func GetConfigPath(root string, localFile string) string {
@@ -211,5 +250,63 @@ func IsFileExists(root string, localFile string) (bool, error) {
 func CreateDefaultConfig(root string, localFile string) error {
 	file := filepath.Join(root, localFile)
 	data := []byte("{}\n")
-	return os.WriteFile(file, data, 0644)
+	return writeFileAtomic(file, data, 0644)
+}
+
+func writeFileAtomic(file string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(file)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	if info, err := os.Stat(file); err == nil {
+		perm = info.Mode().Perm()
+	}
+
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(file)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := io.Copy(tmp, bytesReader(data)); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, file); err != nil {
+		return err
+	}
+	cleanup = false
+	return syncDir(dir)
+}
+
+func bytesReader(data []byte) io.Reader {
+	return bytes.NewReader(data)
+}
+
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer d.Close()
+	_ = d.Sync()
+	return nil
 }

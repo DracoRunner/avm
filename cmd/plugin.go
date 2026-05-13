@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"avm/internal/plugin"
 	"fmt"
 	"os"
 
+	"github.com/PrajaNova/avm/internal/plugin"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -18,26 +18,26 @@ var pluginAddCmd = &cobra.Command{
 	Use:   "add <url|path>",
 	Short: "Add a plugin from a git URL or local path",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		source := args[0]
 		fmt.Printf("Installing plugin from %s...\n", source)
 		if err := plugin.InstallPlugin(source); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		fmt.Println(color.GreenString("Plugin installed successfully."))
+		return nil
 	},
 }
 
 var pluginListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all installed plugins",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		pluginDir := plugin.GetPluginDir()
 		dirs, err := os.ReadDir(pluginDir)
 		if err != nil {
 			fmt.Println("No plugins installed.")
-			return
+			return nil
 		}
 
 		fmt.Println(color.CyanString("Installed Plugins:"))
@@ -51,6 +51,7 @@ var pluginListCmd = &cobra.Command{
 				fmt.Printf("  %s (%s) - %s\n", color.GreenString(manifest.Name), manifest.Version, manifest.Description)
 			}
 		}
+		return nil
 	},
 }
 
@@ -58,47 +59,48 @@ var pluginRemoveCmd = &cobra.Command{
 	Use:   "remove <name>",
 	Short: "Remove a plugin",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 		if err := plugin.RemovePlugin(name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		fmt.Printf("Plugin '%s' removed.\n", name)
+		return nil
 	},
 }
 
 var pluginUpdateCmd = &cobra.Command{
 	Use:   "update <name>|--all",
 	Short: "Update a plugin or all plugins",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 		if all {
 			pluginDir := plugin.GetPluginDir()
 			dirs, err := os.ReadDir(pluginDir)
 			if err != nil {
-				return
+				return nil
 			}
 			for _, d := range dirs {
 				if d.IsDir() {
 					fmt.Printf("Updating %s...\n", d.Name())
-					plugin.UpdatePlugin(d.Name())
+					if err := plugin.UpdatePlugin(d.Name()); err != nil {
+						return err
+					}
 				}
 			}
-			return
+			return nil
 		}
 
 		if len(args) == 0 {
-			cmd.Help()
-			return
+			return cmd.Help()
 		}
 
 		name := args[0]
 		if err := plugin.UpdatePlugin(name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		fmt.Printf("Plugin '%s' updated.\n", name)
+		return nil
 	},
 }
 

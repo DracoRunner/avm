@@ -1,7 +1,7 @@
 package main
 
 import (
-	"avm/cmd"
+	"github.com/PrajaNova/avm/cmd"
 )
 
 func main() {

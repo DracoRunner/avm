@@ -1,11 +1,12 @@
 package config
 
 import (
-	"avm/internal/plugin"
 	"os"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/PrajaNova/avm/internal/plugin"
 )
 
 var local map[string]string
@@ -20,6 +21,68 @@ var pluginAliases map[string]plugin.ResolvedAlias
 var loadOnce sync.Once
 var loadErr error
 
+type ResolvedConfig struct {
+	LocalAliases  map[string]string
+	GlobalAliases map[string]string
+	LocalEnv      map[string]string
+	GlobalEnv     map[string]string
+	LocalTools    map[string]string
+	GlobalTools   map[string]string
+	PluginAliases map[string]plugin.ResolvedAlias
+}
+
+type Resolver struct {
+	CWD  string
+	Home string
+}
+
+func NewResolver(cwd string) Resolver {
+	home := os.Getenv("HOME")
+	if home == "" {
+		if userHome, err := os.UserHomeDir(); err == nil {
+			home = userHome
+		}
+	}
+	return Resolver{CWD: cwd, Home: home}
+}
+
+func (r Resolver) Load() (*ResolvedConfig, error) {
+	cwd := r.CWD
+	if cwd == "" {
+		cwd = "."
+	}
+
+	localAliases, localResolvedEnv, localResolvedTools, err := LoadFileWithEnv(cwd, ".avm.json")
+	if err != nil {
+		return nil, err
+	}
+
+	var globalAliases map[string]string
+	var globalResolvedEnv map[string]string
+	var globalResolvedTools map[string]string
+	if r.Home != "" {
+		globalAliases, globalResolvedEnv, globalResolvedTools, err = LoadFileWithEnv(r.Home, ".avm.json")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	plugins, err := plugin.LoadAllPlugins(cwd)
+	if err != nil {
+		plugins = nil
+	}
+
+	return &ResolvedConfig{
+		LocalAliases:  localAliases,
+		GlobalAliases: globalAliases,
+		LocalEnv:      localResolvedEnv,
+		GlobalEnv:     globalResolvedEnv,
+		LocalTools:    localResolvedTools,
+		GlobalTools:   globalResolvedTools,
+		PluginAliases: plugins,
+	}, nil
+}
+
 func GetAliases() error {
 	loadOnce.Do(func() {
 		loadErr = loadAliasesInternal()
@@ -28,26 +91,19 @@ func GetAliases() error {
 }
 
 func loadAliasesInternal() error {
-	var err error
-
-	local, localEnv, localTools, err = LoadFileWithEnv(".", ".avm.json")
-	if err != nil {
-		return err
-	}
-
-	home := os.Getenv("HOME")
-	global, globalEnv, globalTools, err = LoadFileWithEnv(home, ".avm.json")
-	if err != nil {
-		return err
-	}
-
-	// Load plugins
 	cwd, _ := os.Getwd()
-	pluginAliases, err = plugin.LoadAllPlugins(cwd)
+	resolved, err := NewResolver(cwd).Load()
 	if err != nil {
-		// Log error but don't fail core resolution
-		// fmt.Fprintf(os.Stderr, "Error loading plugins: %v\n", err)
+		return err
 	}
+
+	local = resolved.LocalAliases
+	global = resolved.GlobalAliases
+	localEnv = resolved.LocalEnv
+	globalEnv = resolved.GlobalEnv
+	localTools = resolved.LocalTools
+	globalTools = resolved.GlobalTools
+	pluginAliases = resolved.PluginAliases
 
 	return nil
 }
@@ -117,6 +173,14 @@ func ResolveToolsWithSource() (map[string]ResolvedTool, error) {
 	return resolved, nil
 }
 
+func ResolveToolsWithSourceFor(cwd string) (map[string]ResolvedTool, error) {
+	resolved, err := NewResolver(cwd).Load()
+	if err != nil {
+		return nil, err
+	}
+	return mergeToolsWithSource(resolved.LocalTools, resolved.GlobalTools), nil
+}
+
 func ResolveToolWithSource(key string) (string, bool, string, error) {
 	if err := GetAliases(); err != nil {
 		return "", false, "", err
@@ -135,6 +199,26 @@ func ResolveToolWithSource(key string) (string, bool, string, error) {
 	}
 
 	return "", false, "", nil
+}
+
+func mergeToolsWithSource(localTools map[string]string, globalTools map[string]string) map[string]ResolvedTool {
+	resolved := map[string]ResolvedTool{}
+
+	for tool, version := range globalTools {
+		resolved[tool] = ResolvedTool{
+			Version: version,
+			Source:  "global",
+		}
+	}
+
+	for tool, version := range localTools {
+		resolved[tool] = ResolvedTool{
+			Version: version,
+			Source:  "local",
+		}
+	}
+
+	return resolved
 }
 
 func ResolveWithSource(key string) (string, bool, string, error) {

@@ -1,4 +1,4 @@
-module avm
+module github.com/PrajaNova/avm
 
 go 1.21
 

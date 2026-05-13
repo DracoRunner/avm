@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"avm/internal/config"
-	"avm/internal/tooling"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 
+	"github.com/PrajaNova/avm/internal/config"
+	"github.com/PrajaNova/avm/internal/tooling"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -24,17 +24,16 @@ var toolCmd = &cobra.Command{
 var toolListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List configured and installed tools",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		resolved, err := tooling.ResolveTools(".")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "avm tool list error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("avm tool list error: %w", err)
 		}
 
 		knownTools := tooling.KnownTools()
 		if len(knownTools) == 0 {
 			fmt.Println("No tool providers are available.")
-			return
+			return nil
 		}
 
 		fmt.Println(color.CyanString("Tool providers:"))
@@ -59,6 +58,7 @@ var toolListCmd = &cobra.Command{
 			sort.Strings(installed)
 			fmt.Printf("    installed: %s\n", strings.Join(installed, ", "))
 		}
+		return nil
 	},
 }
 
@@ -67,14 +67,13 @@ var toolUseCmd = &cobra.Command{
 	Short: "Set the active version for a tool",
 	Long:  `Set a local or global tool version override in .avm.json.`,
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tool := args[0]
 		version := args[1]
 
 		_, ok := tooling.GetProvider(tool)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "avm: unsupported tool \"%s\"\n", tool)
-			os.Exit(1)
+			return fmt.Errorf("unsupported tool %q", tool)
 		}
 
 		var alias *config.Alias
@@ -93,8 +92,7 @@ var toolUseCmd = &cobra.Command{
 		}
 
 		if err := config.UseTool(alias, tool, version); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		if toolGlobal {
@@ -102,6 +100,7 @@ var toolUseCmd = &cobra.Command{
 		} else {
 			fmt.Printf("✓ Set local %s version to %s\n", tool, version)
 		}
+		return nil
 	},
 }
 
@@ -109,21 +108,20 @@ var toolInstallCmd = &cobra.Command{
 	Use:   "install <tool> <version>",
 	Short: "Install a tool version",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tool := args[0]
 		version := args[1]
 
 		_, ok := tooling.GetProvider(tool)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "avm: unsupported tool \"%s\"\n", tool)
-			os.Exit(1)
+			return fmt.Errorf("unsupported tool %q", tool)
 		}
 
 		if err := tooling.InstallTool(tool, version); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		fmt.Printf("✓ Installed %s %s\n", tool, version)
+		return nil
 	},
 }
 
@@ -131,19 +129,18 @@ var toolUninstallCmd = &cobra.Command{
 	Use:   "uninstall <tool> <version>",
 	Short: "Remove a tool version",
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		tool := args[0]
 		version := args[1]
 		if _, ok := tooling.GetProvider(tool); !ok {
-			fmt.Fprintf(os.Stderr, "avm: unsupported tool \"%s\"\n", tool)
-			os.Exit(1)
+			return fmt.Errorf("unsupported tool %q", tool)
 		}
 
 		if err := tooling.UninstallTool(tool, version); err != nil {
-			fmt.Fprintf(os.Stderr, "avm: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		fmt.Printf("✓ Removed %s %s\n", tool, version)
+		return nil
 	},
 }
 

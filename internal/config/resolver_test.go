@@ -381,3 +381,29 @@ func TestUseToolWritesStructuredConfig(t *testing.T) {
 		t.Fatalf("expected node tool version in tools map, got: %v", data["tools"])
 	}
 }
+
+func TestLoadFileRejectsInvalidEnvKey(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	if err := os.WriteFile(file, []byte(`{"env":{"BAD;echo hacked":"1"}}`), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if _, _, _, err := LoadFileWithEnv(root, ".avm.json"); err == nil {
+		t.Fatal("expected invalid env key error")
+	}
+}
+
+func TestLoadFileStructuredParseErrorDoesNotFallbackToLegacy(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	if err := os.WriteFile(file, []byte(`{"aliases":{"start":123}}`), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if _, _, _, err := LoadFileWithEnv(root, ".avm.json"); err == nil {
+		t.Fatal("expected structured parse error")
+	}
+}

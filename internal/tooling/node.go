@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -27,6 +26,7 @@ const (
 )
 
 var nodeDistURL = nodeDistBaseURL
+var nodeHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 type nodeProvider struct{}
 
@@ -168,17 +168,18 @@ func (n *nodeProvider) Install(tool string, version string) error {
 		return fmt.Errorf("unable to locate extracted archive root at %s", extractedRoot)
 	}
 
-	if err := os.RemoveAll(installDir); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
 	if err := os.MkdirAll(filepath.Dir(installDir), 0755); err != nil {
 		return err
 	}
 
-	if err := os.Rename(extractedRoot, installDir); err != nil {
+	tempInstallDir := filepath.Join(filepath.Dir(installDir), "."+filepath.Base(installDir)+".installing")
+	if err := os.RemoveAll(tempInstallDir); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	if err := os.Rename(extractedRoot, tempInstallDir); err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempInstallDir)
 
 	metadata := nodeInstallMetadata{
 		Tool:        nodeToolName,
@@ -197,11 +198,11 @@ func (n *nodeProvider) Install(tool string, version string) error {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(installDir, metadataFileName), rawMetadata, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tempInstallDir, metadataFileName), rawMetadata, 0644); err != nil {
 		return err
 	}
 
-	return nil
+	return replaceInstallDir(tempInstallDir, installDir)
 }
 
 func (n *nodeProvider) Uninstall(tool string, version string) error {
@@ -292,7 +293,7 @@ func normalizeVersion(version string) string {
 }
 
 func downloadFile(url string, target string) error {
-	resp, err := http.Get(url)
+	resp, err := nodeHTTPClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -314,7 +315,7 @@ func downloadFile(url string, target string) error {
 
 func nodeChecksum(versionTag string, fileName string) (string, error) {
 	checksumsURL := fmt.Sprintf("%s/%s/SHASUMS256.txt", nodeDistURL, versionTag)
-	resp, err := http.Get(checksumsURL)
+	resp, err := nodeHTTPClient.Get(checksumsURL)
 	if err != nil {
 		return "", err
 	}
@@ -344,13 +345,17 @@ func nodeChecksum(versionTag string, fileName string) (string, error) {
 }
 
 func fileSHA256(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), nil
+	hash := sha256.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func extractNodeArchive(archivePath string, stagingDir string, fileName string, ext string) error {
@@ -399,6 +404,20 @@ func extractNodeTarGz(archivePath, stagingDir string) error {
 			if err := os.MkdirAll(target, 0755); err != nil {
 				return err
 			}
+			continue
+		}
+
+		if header.Typeflag == tar.TypeSymlink {
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+			if err := os.Symlink(header.Linkname, target); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
 			continue
 		}
 
@@ -451,17 +470,50 @@ func extractNodeZip(archivePath, stagingDir string) error {
 			return err
 		}
 
-		var buf bytes.Buffer
-		_, err = io.Copy(&buf, in)
-		in.Close()
+		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, f.FileInfo().Mode())
 		if err != nil {
+			in.Close()
 			return err
 		}
-
-		if err := os.WriteFile(targetPath, buf.Bytes(), f.FileInfo().Mode()); err != nil {
+		if _, err := io.Copy(out, in); err != nil {
+			in.Close()
+			out.Close()
+			return err
+		}
+		in.Close()
+		if err := out.Close(); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func replaceInstallDir(tempInstallDir, installDir string) error {
+	backupDir := installDir + ".previous"
+	if err := os.RemoveAll(backupDir); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	hadExisting := false
+	if _, err := os.Stat(installDir); err == nil {
+		hadExisting = true
+		if err := os.Rename(installDir, backupDir); err != nil {
+			return err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.Rename(tempInstallDir, installDir); err != nil {
+		if hadExisting {
+			_ = os.Rename(backupDir, installDir)
+		}
+		return err
+	}
+
+	if hadExisting {
+		return os.RemoveAll(backupDir)
+	}
 	return nil
 }
