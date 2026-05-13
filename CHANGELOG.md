@@ -6,6 +6,14 @@ The format follows Keep a Changelog style, and releases use semantic versioning.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-05-13
+
+### Added
+- Rust workspace release candidate for npm and Homebrew publishing.
+
+### Changed
+- Aligned npm package and Rust binary versions for release automation.
+
 ### Added
 - Rust CLI workspace with `avm-cli`, `avm-core`, `avm-shims`, `avm-runtime`, `avm-plugin-api`, and `avm-plugin-node`.
 - Docker-based test harness and Rust integration test coverage.

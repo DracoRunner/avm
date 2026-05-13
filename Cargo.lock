@@ -60,7 +60,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "avm-cli"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "avm-core",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "avm-core"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "avm-plugin-api",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "avm-plugin-api"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "serde",
@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "avm-plugin-node"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "avm-plugin-api",
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "avm-runtime"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "avm-plugin-api",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "avm-shims"
-version = "0.1.0"
+version = "0.2.7"
 dependencies = [
  "anyhow",
 ]
