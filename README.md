@@ -79,18 +79,29 @@ Define your aliases in `.avm.json`:
 
 ```json
 {
-  "android:start": "npx react-native run-android",
-  "ios:build": "npx react-native run-ios --configuration Release",
-  "git:feature": "git checkout -b feature/$1",
-  "docker:up": "docker-compose up -d"
+  "aliases": {
+    "android:start": "npx react-native run-android",
+    "ios:build": "npx react-native run-ios --configuration Release",
+    "git:feature": "git checkout -b feature/$1",
+    "docker:up": "docker-compose up -d"
+  },
+  "env": {
+    "NODE_ENV": "development",
+    "API_URL": "https://api.local"
+  }
 }
 ```
+
+`avm` also still supports legacy `.avm.json` files that contain only aliases as a flat map.
+Existing legacy `.avm.json` files are migrated to the structured form automatically on read, so users upgrading to this version do not need to manually edit existing files.
 
 Now you just type:
 - `avm android:start`
 - `avm ios:build`
 - `avm git:feature my-new-feature`
 - `avm docker:up`
+
+Run `avm list` to inspect active local/global aliases and `env` values side by side.
 
 ### Interactive Suggestions
 

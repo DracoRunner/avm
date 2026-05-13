@@ -1,6 +1,11 @@
 package config
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -50,15 +55,23 @@ func TestNormalizeForComparison(t *testing.T) {
 }
 
 func TestSuggestAliases(t *testing.T) {
-	// Mock local and global aliases
-	local = map[string]string{
-		"run-tv": "echo tv",
-		"build":  "go build",
+	root := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
 	}
-	global = map[string]string{
-		"deploy": "sh deploy.sh",
+	defer os.Chdir(oldWd)
+
+	if err := os.WriteFile(filepath.Join(root, ".avm.json"), []byte(`{"run-tv": "echo tv", "build": "go build", "deploy": "sh deploy.sh"}`), 0644); err != nil {
+		t.Fatal(err)
 	}
-	loaded = true
+
+	loadOnce = sync.Once{}
+	loadErr = nil
+	local = nil
+	global = nil
+	pluginAliases = nil
+	loadErr = nil
 
 	tests := []struct {
 		query    string
@@ -98,5 +111,145 @@ func TestSuggestAliases(t *testing.T) {
 		if !foundAll {
 			t.Errorf("SuggestAliases(%q) = %v; want to contain %v", test.query, actual, test.expected)
 		}
+	}
+}
+
+func TestLoadFileLegacyMap(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	content := []byte(`{"build": "go build", "test": "go test"}`)
+	if err := os.WriteFile(file, content, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	aliases, env, err := LoadFileWithEnv(root, ".avm.json")
+	if err != nil {
+		t.Fatalf("LoadFileWithEnv() error = %v", err)
+	}
+
+	if len(aliases) != 2 || env != nil {
+		t.Fatalf("expected legacy aliases with nil env, got aliases=%v env=%v", aliases, env)
+	}
+
+	if aliases["build"] != "go build" {
+		t.Fatalf("expected alias %q, got %q", "go build", aliases["build"])
+	}
+}
+
+func TestLoadFileStructured(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	content := []byte(`{"aliases": {"start": "npm run start"}, "env": {"NODE_ENV": "test", "API_URL": "https://example.com"}}`)
+	if err := os.WriteFile(file, content, 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	aliases, env, err := LoadFileWithEnv(root, ".avm.json")
+	if err != nil {
+		t.Fatalf("LoadFileWithEnv() error = %v", err)
+	}
+
+	if aliases == nil || aliases["start"] != "npm run start" {
+		t.Fatalf("expected alias not found in structured config: %v", aliases)
+	}
+
+	if env["NODE_ENV"] != "test" || env["API_URL"] != "https://example.com" {
+		t.Fatalf("expected env values not found in structured config: %v", env)
+	}
+}
+
+func TestResolveEnvPrecedence(t *testing.T) {
+	root := t.TempDir()
+	oldWd, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWd)
+
+	localFile := filepath.Join(root, ".avm.json")
+	if err := os.WriteFile(localFile, []byte(`{"aliases": {"start": "node local.js"}, "env": {"NODE_ENV": "local", "API_URL": "https://local.example.com"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, ".avm.json"), []byte(`{"env": {"NODE_ENV": "global", "GLOBAL_ONLY": "yes"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	loadOnce = sync.Once{}
+	loadErr = nil
+	local = nil
+	global = nil
+	localEnv = nil
+	globalEnv = nil
+
+	result, err := ResolveEnv()
+	if err != nil {
+		t.Fatalf("ResolveEnv() error = %v", err)
+	}
+
+	expected := map[string]string{
+		"NODE_ENV":      "local",
+		"API_URL":       "https://local.example.com",
+		"GLOBAL_ONLY":   "yes",
+	}
+	if !reflect.DeepEqual(result, expected) {
+		t.Fatalf("expected %v, got %v", expected, result)
+	}
+}
+
+func TestLoadFileLegacyMapAutoMigrates(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	if err := os.WriteFile(file, []byte(`{"build":"go build","test":"go test"}`), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if _, _, err := LoadFileWithEnv(root, ".avm.json"); err != nil {
+		t.Fatalf("LoadFileWithEnv() error = %v", err)
+	}
+
+	migrated, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read migrated file: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(migrated, &raw); err != nil {
+		t.Fatalf("invalid migrated json: %v", err)
+	}
+
+	if _, ok := raw["aliases"]; !ok {
+		t.Fatalf("expected migrated file to contain aliases key, got: %s", string(migrated))
+	}
+
+	if _, ok := raw["build"]; ok {
+		t.Fatalf("expected legacy keys to be migrated out, got: %s", string(migrated))
+	}
+}
+
+func TestMigrateLegacyConfigFunction(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, ".avm.json")
+
+	if err := os.WriteFile(file, []byte(`{"build":"go build"}`), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	if err := MigrateLegacyConfig(root, ".avm.json"); err != nil {
+		t.Fatalf("MigrateLegacyConfig() error = %v", err)
+	}
+
+	migrated, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("read migrated file: %v", err)
+	}
+
+	if !json.Valid(migrated) {
+		t.Fatalf("migrated file is not valid json: %s", string(migrated))
 	}
 }

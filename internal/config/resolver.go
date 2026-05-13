@@ -10,6 +10,10 @@ import (
 
 var local map[string]string
 var global map[string]string
+
+var localEnv map[string]string
+var globalEnv map[string]string
+
 var pluginAliases map[string]plugin.ResolvedAlias
 var loadOnce sync.Once
 var loadErr error
@@ -24,13 +28,13 @@ func GetAliases() error {
 func loadAliasesInternal() error {
 	var err error
 
-	local, err = LoadFile(".", ".avm.json")
+	local, localEnv, err = LoadFileWithEnv(".", ".avm.json")
 	if err != nil {
 		return err
 	}
 
 	home := os.Getenv("HOME")
-	global, err = LoadFile(home, ".avm.json")
+	global, globalEnv, err = LoadFileWithEnv(home, ".avm.json")
 	if err != nil {
 		return err
 	}
@@ -44,6 +48,24 @@ func loadAliasesInternal() error {
 	}
 
 	return nil
+}
+
+func ResolveEnv() (map[string]string, error) {
+	if err := GetAliases(); err != nil {
+		return nil, err
+	}
+
+	resolved := map[string]string{}
+
+	for key, value := range globalEnv {
+		resolved[key] = value
+	}
+
+	for key, value := range localEnv {
+		resolved[key] = value
+	}
+
+	return resolved, nil
 }
 
 func ResolveWithSource(key string) (string, bool, string, error) {

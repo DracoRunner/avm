@@ -10,6 +10,28 @@ const shellInitScript = `# avm shell function
 # Enables directory-aware alias resolution
 avm() {
   local key="$1"
+  local _avm_env_script
+  _avm_env_script="$(command avm-bin env 2>/dev/null)"
+
+  _avm_run_with_env() {
+    if [ -n "$1" ]; then
+      if [ -n "$_avm_env_script" ]; then
+        (eval "$_avm_env_script; $1")
+      else
+        eval "$1"
+      fi
+    fi
+    return $?
+  }
+
+  _avm_run_passthrough() {
+    if [ -n "$_avm_env_script" ]; then
+      (eval "$_avm_env_script"; "$@")
+    else
+      "$@"
+    fi
+    return $?
+  }
 
   # No arguments - show help
   if [ -z "$key" ]; then
@@ -19,7 +41,7 @@ avm() {
 
   # Check if it's an avm subcommand
   case "$key" in
-    init|add|list|ls|remove|rm|which|version|help|shell-init|plugin|completion|--help|-h|--version|-v)
+    init|add|list|ls|remove|rm|which|env|version|help|shell-init|plugin|completion|--help|-h|--version|-v)
       command avm-bin "$@"
       return $?
       ;;
@@ -28,7 +50,7 @@ avm() {
   # Try to resolve the alias
   local resolved
   if resolved=$(command avm-bin resolve "$@" 2>/dev/null); then
-    eval "$resolved"
+    _avm_run_with_env "$resolved"
     return $?
   fi
 
@@ -60,7 +82,7 @@ avm() {
     # Passthrough: run the original command
     rm -f "$_avm_out_file"
     # Execute the original command, properly quoting arguments
-    "$@"
+    _avm_run_passthrough "$@"
     return $?
   else
     # Some other error, return exit code

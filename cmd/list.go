@@ -11,8 +11,8 @@ import (
 var listCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
-	Short:   "List all active aliases",
-	Long:    `Display all aliases currently active for this directory, including both local and global aliases.`,
+	Short:   "List active aliases and environment variables",
+	Long:    `Display active aliases and environment overrides currently in scope for this directory, including local and global sources.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		alias := &config.Alias{
 			Root:      ".",

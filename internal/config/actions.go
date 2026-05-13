@@ -50,7 +50,7 @@ func Add(alias *Alias, key string, value string) error {
 		}
 	}
 
-	aliases, err := LoadFile(root, localFile)
+	aliases, env, err := LoadFileWithEnv(root, localFile)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,12 @@ func Add(alias *Alias, key string, value string) error {
 
 	aliases[key] = value
 
-	return SaveAliases(root, localFile, aliases)
+	structured, err := IsStructuredConfig(root, localFile)
+	if err != nil {
+		return err
+	}
+
+	return SaveConfig(root, localFile, aliases, env, structured)
 }
 
 func List(alias *Alias) error {
@@ -106,6 +111,29 @@ func List(alias *Alias) error {
 		fmt.Println()
 	}
 
+	hasLocalEnv := localEnv != nil && len(localEnv) > 0
+	hasGlobalEnv := globalEnv != nil && len(globalEnv) > 0
+
+	if hasLocalEnv {
+		fmt.Println(color.CyanString("Local environment (.avm.json):"))
+		var localEnvKeys []string
+		for key := range localEnv {
+			localEnvKeys = append(localEnvKeys, key)
+		}
+		sort.Strings(localEnvKeys)
+		for _, key := range localEnvKeys {
+			value := localEnv[key]
+			if globalEnv != nil {
+				if _, ok := globalEnv[key]; ok {
+					fmt.Printf("  %s=%s  %s\n", color.GreenString(key), value, color.YellowString("[override global]"))
+					continue
+				}
+			}
+			fmt.Printf("  %s=%s\n", color.GreenString(key), value)
+		}
+		fmt.Println()
+	}
+
 	if hasGlobal {
 		fmt.Println(color.CyanString("Global aliases (~/.avm.json):"))
 		var globalKeys []string
@@ -121,6 +149,25 @@ func List(alias *Alias) error {
 				}
 			}
 			fmt.Printf("  %s → %s\n", color.GreenString(key), value)
+		}
+		fmt.Println()
+	}
+
+	if hasGlobalEnv {
+		fmt.Println(color.CyanString("Global environment (~/.avm.json):"))
+		var globalEnvKeys []string
+		for key := range globalEnv {
+			if localEnv != nil {
+				if _, ok := localEnv[key]; ok {
+					continue
+				}
+			}
+			globalEnvKeys = append(globalEnvKeys, key)
+		}
+		sort.Strings(globalEnvKeys)
+		for _, key := range globalEnvKeys {
+			value := globalEnv[key]
+			fmt.Printf("  %s=%s\n", color.GreenString(key), value)
 		}
 		fmt.Println()
 	}
@@ -180,7 +227,7 @@ func Remove(alias *Alias, key string) error {
 		return fmt.Errorf("no %s found", localFile)
 	}
 
-	aliases, err := LoadFile(root, localFile)
+	aliases, env, err := LoadFileWithEnv(root, localFile)
 	if err != nil {
 		return err
 	}
@@ -195,7 +242,12 @@ func Remove(alias *Alias, key string) error {
 
 	delete(aliases, key)
 
-	return SaveAliases(root, localFile, aliases)
+	structured, err := IsStructuredConfig(root, localFile)
+	if err != nil {
+		return err
+	}
+
+	return SaveConfig(root, localFile, aliases, env, structured)
 }
 
 func Which(alias *Alias, key string) error {

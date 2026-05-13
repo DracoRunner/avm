@@ -27,10 +27,11 @@ graph TD
 ---
 
 ## 2. Alias Resolution (Internal)
-When `avm-bin which <key>` is called:
-1.  **Load Local**: Reads `./.avm.json`. Returns value if found.
-2.  **Load Global**: Reads `~/.avm.json`. Returns value if found.
-3.  **Execute Plugins**:
+When resolving aliases, `avm` loads:
+1.  **Load Local**: Reads `./.avm.json`. Returns aliases if found.
+2.  **Load Global**: Reads `~/.avm.json`. Returns aliases if found.
+3.  **Resolve Environment**: Merges `env` from local and global config (`local` wins on conflict).
+4.  **Execute Plugins**:
     - Discovers plugins in `~/.avm/plugins/`.
     - Spawns a bounded worker pool.
     - For each plugin, runs `bin/health-check` (if exists).

@@ -6,6 +6,7 @@
 
 ## 1. Directory-Aware Scoping
 The core feature of `avm`. Aliases are loaded from the `.avm.json` file in your current directory.
+When needed, command environment can also be declared in the same file under `env` and is applied automatically for commands run through `avm`.
 *   **Use Case**: In a React Native project, `avm start` runs the bundler. In a Go project, `avm start` might run `go run main.go`.
 *   **Benefit**: You never have to remember which project uses which start command.
 
